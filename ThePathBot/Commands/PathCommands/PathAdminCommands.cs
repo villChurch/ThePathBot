@@ -20,7 +20,9 @@ namespace ThePathBot.Commands.PathCommands
 
         [Command("showpaths")]
         [Description("show paths for mentioned user")]
-        [RequirePermissions(Permissions.KickMembers)]
+        //[RequirePermissions(Permissions.KickMembers)]
+        [RequireOwner]
+        [Hidden]
         public async Task showPaths(CommandContext ctx, [Description("mention the user you want to get the paths of")]
             params string[] args)
         {

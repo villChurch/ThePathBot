@@ -67,7 +67,7 @@ namespace ThePathBot
             });
 #pragma warning restore IDE0058 // Expression value is never used
 
-            var commandsConfig = new CommandsNextConfiguration
+            CommandsNextConfiguration commandsConfig = new CommandsNextConfiguration
             {
                 StringPrefixes = new string[] { configJson.Prefix },
                 EnableMentionPrefix = true,
@@ -83,6 +83,7 @@ namespace ThePathBot
             Commands.RegisterCommands<MainPathCommands>();
             Commands.RegisterCommands<UtilityCommands>();
             Commands.RegisterCommands<PathAdminCommands>();
+            Commands.RegisterCommands<PathTagging>();
             // Commands.RegisterCommands<FunCommands>();
 
             await Client.ConnectAsync();
@@ -93,71 +94,54 @@ namespace ThePathBot
         private Task OnClientReady(ReadyEventArgs e)
         {
             // let's log the fact that this event occured
-            e.Client.DebugLogger.LogMessage(LogLevel.Info, "ExampleBot", "Client is ready to process events.", DateTime.Now);
+            e.Client.DebugLogger.LogMessage(LogLevel.Info, "The Path", "Client is ready to process events.", DateTime.Now);
 
-            // since this method is not async, let's return
-            // a completed task, so that no additional work
-            // is done
             return Task.CompletedTask;
         }
 
         private Task Client_GuildAvailable(GuildCreateEventArgs e)
         {
-            // let's log the name of the guild that was just
-            // sent to our client
-            e.Client.DebugLogger.LogMessage(LogLevel.Info, "ExampleBot", $"Guild available: {e.Guild.Name}", DateTime.Now);
-
-            // since this method is not async, let's return
-            // a completed task, so that no additional work
-            // is done
+            e.Client.DebugLogger.LogMessage(LogLevel.Info, "The Path", $"Guild available: {e.Guild.Name}", DateTime.Now);
             return Task.CompletedTask;
         }
 
         private Task Client_ClientError(ClientErrorEventArgs e)
         {
-            // let's log the details of the error that just 
-            // occured in our client
-            e.Client.DebugLogger.LogMessage(LogLevel.Error, "ExampleBot", $"Exception occured: {e.Exception.GetType()}: {e.Exception.Message}", DateTime.Now);
+            e.Client.DebugLogger.LogMessage(LogLevel.Error, "The Path", $"Exception occured: {e.Exception.GetType()}: {e.Exception.Message}", DateTime.Now);
 
-            // since this method is not async, let's return
-            // a completed task, so that no additional work
-            // is done
             return Task.CompletedTask;
         }
 
         private Task Commands_CommandExecuted(CommandExecutionEventArgs e)
         {
-            // let's log the name of the command and user
-            e.Context.Client.DebugLogger.LogMessage(LogLevel.Info, "ExampleBot", $"{e.Context.User.Username} successfully executed '{e.Command.QualifiedName}'", DateTime.Now);
+            e.Context.Client.DebugLogger.LogMessage(LogLevel.Info, "The Path", $"{e.Context.User.Username} successfully executed '{e.Command.QualifiedName}'", DateTime.Now);
 
-            // since this method is not async, let's return
-            // a completed task, so that no additional work
-            // is done
             return Task.CompletedTask;
         }
 
         private async Task Commands_CommandErrored(CommandErrorEventArgs e)
         {
-            // let's log the error details
-            e.Context.Client.DebugLogger.LogMessage(LogLevel.Error, "ExampleBot", $"{e.Context.User.Username} tried executing '{e.Command?.QualifiedName ?? "<unknown command>"}' but it errored: {e.Exception.GetType()}: {e.Exception.Message ?? "<no message>"}", DateTime.Now);
+            e.Context.Client.DebugLogger.LogMessage(LogLevel.Error, "The Path", $"{e.Context.User.Username} tried executing '{e.Command?.QualifiedName ?? "<unknown command>"}' but it errored: {e.Exception.GetType()}: {e.Exception.Message ?? "<no message>"}", DateTime.Now);
 
-            // let's check if the error is a result of lack
-            // of required permissions
             if (e.Exception is ChecksFailedException ex)
             {
-                // yes, the user lacks required permissions, 
-                // let them know
-
                 var emoji = DiscordEmoji.FromName(e.Context.Client, ":no_entry:");
 
-                // let's wrap the response into an embed
                 var embed = new DiscordEmbedBuilder
                 {
                     Title = "Access denied",
                     Description = $"{emoji} You do not have the permissions required to execute this command.",
                     Color = new DiscordColor(0xFF0000) // red
-                    // there are also some pre-defined colors available
-                    // as static members of the DiscordColor struct
+                };
+                await e.Context.RespondAsync("", embed: embed);
+            }
+            else if (e.Exception is CommandNotFoundException Cnfex)
+            {
+                var embed = new DiscordEmbedBuilder
+                {
+                    Title = "Command not found",
+                    Description = $"I do not know this command. See ?help for a list of commands I know.",
+                    Color = new DiscordColor(0xFF0000) // red
                 };
                 await e.Context.RespondAsync("", embed: embed);
             }
