@@ -84,6 +84,7 @@ namespace ThePathBot
             Commands.RegisterCommands<UtilityCommands>();
             Commands.RegisterCommands<PathAdminCommands>();
             Commands.RegisterCommands<PathTagging>();
+            Commands.RegisterCommands<Net>();
             // Commands.RegisterCommands<FunCommands>();
 
             await Client.ConnectAsync();

@@ -149,6 +149,7 @@
     <Compile Include="Commands\UtilityCommands.cs" />
     <Compile Include="Utilities\CheckForDuplicatePathName.cs" />
     <Compile Include="Commands\PathCommands\PathTagging.cs" />
+    <Compile Include="Commands\Net.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
