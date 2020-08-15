@@ -150,6 +150,19 @@
     <Compile Include="Utilities\CheckForDuplicatePathName.cs" />
     <Compile Include="Commands\PathCommands\PathTagging.cs" />
     <Compile Include="Commands\Net.cs" />
+    <Compile Include="Commands\PascalWisdom.cs" />
+    <Compile Include="Models\UrbanDictionaryModel.cs" />
+    <Compile Include="Commands\UrbanDictionary\UrbanDictionarySearch.cs" />
+    <Compile Include="Commands\Axe.cs" />
+    <Compile Include="Commands\ACNHCommands\Villager.cs" />
+    <Compile Include="Models\VillagerModel.cs" />
+    <Compile Include="Commands\ACNHCommands\Fish.cs" />
+    <Compile Include="Models\FishModel.cs" />
+    <Compile Include="Commands\Admin\Emoji.cs" />
+    <Compile Include="Handlers\Dialogue\Steps\IDialogueStep.cs" />
+    <Compile Include="Handlers\Dialogue\Steps\DialogueStepBase.cs" />
+    <Compile Include="Handlers\Dialogue\Steps\ReactionStep.cs" />
+    <Compile Include="Handlers\Dialogue\DialogueHandler.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
@@ -159,6 +172,13 @@
     <Folder Include="Utilities\" />
     <Folder Include="Commands\" />
     <Folder Include="Commands\PathCommands\" />
+    <Folder Include="Models\" />
+    <Folder Include="Commands\UrbanDictionary\" />
+    <Folder Include="Commands\ACNHCommands\" />
+    <Folder Include="Commands\Admin\" />
+    <Folder Include="Handlers\" />
+    <Folder Include="Handlers\Dialogue\" />
+    <Folder Include="Handlers\Dialogue\Steps\" />
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
 </Project>

@@ -95,7 +95,7 @@ namespace ThePathBot.Commands.PathCommands
         [Description("Gets a tag if set")]
         public async Task getTag(CommandContext ctx, params string[] tagName)
         {
-            string tag = String.Join(" ", tagName);
+            string tag = string.Join(" ", tagName);
 
             var dbCon = DBConnection.Instance();
             var json = string.Empty;

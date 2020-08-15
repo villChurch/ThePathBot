@@ -12,6 +12,9 @@ using System.Text;
 using System.Threading.Tasks;
 using ThePathBot.Commands.PathCommands;
 using ThePathBot.Commands;
+using ThePathBot.Commands.UrbanDictionary;
+using ThePathBot.Commands.ACNHCommands;
+using ThePathBot.Commands.Admin;
 
 namespace ThePathBot
 {
@@ -20,6 +23,8 @@ namespace ThePathBot
         private DiscordClient Client { get; set; }
         private CommandsNextExtension Commands { get; set; }
         public InteractivityConfiguration Interactivity { get; private set; }
+        private int countNumber = 0;
+        private ulong lastCountId { get; set; }
 
         public Bot()
         {
@@ -54,6 +59,7 @@ namespace ThePathBot
             Client.Ready += OnClientReady;
             Client.GuildAvailable += this.Client_GuildAvailable;
             Client.ClientErrored += this.Client_ClientError;
+            Client.MessageCreated += this.Client_MessageCreated;
 
             // let's enable interactivity, and set default options
 #pragma warning disable IDE0058 // Expression value is never used
@@ -85,11 +91,72 @@ namespace ThePathBot
             Commands.RegisterCommands<PathAdminCommands>();
             Commands.RegisterCommands<PathTagging>();
             Commands.RegisterCommands<Net>();
+            Commands.RegisterCommands<PascalWisdom>();
+            Commands.RegisterCommands<UrbanDictionarySearch>();
+            Commands.RegisterCommands<Axe>();
+            Commands.RegisterCommands<Villager>();
+            Commands.RegisterCommands<Fish>();
+            Commands.RegisterCommands<Emoji>();
             // Commands.RegisterCommands<FunCommands>();
 
             await Client.ConnectAsync();
 
             await Task.Delay(-1);
+        }
+
+        private async Task Client_MessageCreated(MessageCreateEventArgs e)
+        {
+            //return;
+            if (e.Channel.Id == 742996544680099931 && e.Message.Author.Id != 648636613286690836)
+            {
+                string message = e.Message.Content;
+                bool isANumber = int.TryParse(message, out int number);
+                number++;
+                if (isANumber)
+                {
+                    await e.Channel.SendMessageAsync(number.ToString()).ConfigureAwait(false);
+                }
+            }
+            /* if (e.Channel.Id == 742996544680099931)
+            {
+                string message = e.Message.Content;
+                bool isANumber = int.TryParse(message, out int number);
+                if (isANumber)
+                {
+                    var emoji = DiscordEmoji.FromName(e.Client, ":thumbsup:");
+                    if (number == (countNumber + 1) && lastCountId != e.Message.Author.Id)
+                    {
+                        await e.Message.CreateReactionAsync(emoji).ConfigureAwait(false);
+                        countNumber++;
+                        lastCountId = e.Message.Author.Id;
+                    }
+                    else if(e.Message.Author.Id == lastCountId)
+                    {
+                        DiscordEmbedBuilder embed = new DiscordEmbedBuilder
+                        {
+                            Title = "Wait your turn!",
+                            Color = DiscordColor.Red,
+                            Description = $"You can't enter more than one number in a row please wait your turn {e.Guild.GetMemberAsync(e.Message.Author.Id).Result.DisplayName}. Start again from 1"
+                        };
+                        countNumber = 0;
+                        lastCountId = 0;
+                        await e.Channel.SendMessageAsync(embed: embed).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        DiscordEmbedBuilder embed = new DiscordEmbedBuilder
+                        {
+                            Title = "Wrong number!",
+                            Color = DiscordColor.Red,
+                            Description = e.Guild.GetMemberAsync(e.Message.Author.Id).Result.DisplayName + " has enetered the wrong number! Start again from 1"
+                        };
+                        countNumber = 0;
+                        lastCountId = 0;
+                        await e.Channel.SendMessageAsync(embed: embed).ConfigureAwait(false);
+                    }
+                    Console.Out.WriteLine("Current number is " + countNumber);
+                }
+            } */
         }
 
         private Task OnClientReady(ReadyEventArgs e)
@@ -138,6 +205,10 @@ namespace ThePathBot
             }
             else if (e.Exception is CommandNotFoundException Cnfex)
             {
+                if (e.Context.Message.Content.Contains("??") || e.Context.Message.Content.Contains("?!"))
+                {
+                    return; // for when people do ?????!?....
+                }
                 var embed = new DiscordEmbedBuilder
                 {
                     Title = "Command not found",
