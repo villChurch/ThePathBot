@@ -18,6 +18,8 @@ using ThePathBot.Commands.Admin;
 using System.Collections.Generic;
 using ThePathBot.Commands.TipSystem;
 using ThePathBot.Commands.QueueCommands;
+using ThePathBot.Utilities;
+using MySql.Data.MySqlClient;
 
 namespace ThePathBot
 {
@@ -26,13 +28,81 @@ namespace ThePathBot
         private DiscordClient Client { get; set; }
         private CommandsNextExtension Commands { get; set; }
         public InteractivityConfiguration Interactivity { get; private set; }
-        private int countNumber = 0;
+        private int countNumber = GetCountNumberOnRestart();
         private ulong lastCountId { get; set; }
+        private static string configFilePath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
 
         private static readonly DateTime UnixEpoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
         public Bot()
         {
+        }
+
+        private static int GetCountNumberOnRestart()
+        {
+            int foundNumber = 0;
+            DBConnection dbCon = DBConnection.Instance();
+            string json = string.Empty;
+
+            using (FileStream fs =
+                File.OpenRead(configFilePath + "/config.json")
+            )
+            using (StreamReader sr = new StreamReader(fs, new UTF8Encoding(false)))
+            {
+                json = sr.ReadToEnd();
+            }
+
+            ConfigJson configJson = JsonConvert.DeserializeObject<ConfigJson>(json);
+            dbCon.DatabaseName = configJson.databaseName;
+            dbCon.Password = configJson.databasePassword;
+            dbCon.databaseUser = configJson.databaseUser;
+            dbCon.databasePort = configJson.databasePort;
+            MySqlConnection connection = new MySqlConnection(dbCon.connectionString);
+
+            string query = "SELECT value FROM `configuration` WHERE item = ?item";
+            MySqlCommand command = new MySqlCommand(query, connection);
+            command.Parameters.Add("?item", MySqlDbType.VarChar, 255).Value = "countNumber";
+            connection.Open();
+            MySqlDataReader reader = command.ExecuteReader();
+            if (reader.HasRows)
+            {
+                while (reader.Read())
+                {
+                    foundNumber = int.Parse(reader.GetString("value"));
+                }
+            }
+            reader.Close();
+            connection.Close();
+            return foundNumber;
+        }
+
+        private void UpdateCountNumberInDb(int newNumber)
+        {
+            DBConnection dbCon = DBConnection.Instance();
+            string json = string.Empty;
+
+            using (FileStream fs =
+                File.OpenRead(configFilePath + "/config.json")
+            )
+            using (StreamReader sr = new StreamReader(fs, new UTF8Encoding(false)))
+            {
+                json = sr.ReadToEnd();
+            }
+
+            ConfigJson configJson = JsonConvert.DeserializeObject<ConfigJson>(json);
+            dbCon.DatabaseName = configJson.databaseName;
+            dbCon.Password = configJson.databasePassword;
+            dbCon.databaseUser = configJson.databaseUser;
+            dbCon.databasePort = configJson.databasePort;
+            MySqlConnection connection = new MySqlConnection(dbCon.connectionString);
+
+            string query = "UPDATE configuration SET value = ?newNumber where item = ?item";
+            MySqlCommand command = new MySqlCommand(query, connection);
+            command.Parameters.Add("?item", MySqlDbType.VarChar, 255).Value = "countNumber";
+            command.Parameters.Add("?newNumber", MySqlDbType.VarChar, 255).Value = newNumber.ToString();
+            connection.Open();
+            command.ExecuteNonQuery();
+            connection.Close();
         }
 
         public async Task RunAsync()
@@ -115,7 +185,7 @@ namespace ThePathBot
 
         private async Task Client_MessageCreated(MessageCreateEventArgs e)
         {
-             if (e.Channel.Id == 744753163558584320)
+            if (e.Channel.Id == 744753163558584320)
             {
                 string message = e.Message.Content;
                 bool isANumber = int.TryParse(message, out int number);
@@ -152,7 +222,7 @@ namespace ThePathBot
                         lastCountId = 0;
                         await e.Channel.SendMessageAsync(embed: embed).ConfigureAwait(false);
                     }
-                    Console.Out.WriteLine("Current number is " + countNumber);
+                    UpdateCountNumberInDb(countNumber);
                 }
             }
         }
