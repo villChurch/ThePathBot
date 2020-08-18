@@ -15,6 +15,9 @@ using ThePathBot.Commands;
 using ThePathBot.Commands.UrbanDictionary;
 using ThePathBot.Commands.ACNHCommands;
 using ThePathBot.Commands.Admin;
+using System.Collections.Generic;
+using ThePathBot.Commands.TipSystem;
+using ThePathBot.Commands.QueueCommands;
 
 namespace ThePathBot
 {
@@ -25,6 +28,8 @@ namespace ThePathBot
         public InteractivityConfiguration Interactivity { get; private set; }
         private int countNumber = 0;
         private ulong lastCountId { get; set; }
+
+        private static readonly DateTime UnixEpoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
         public Bot()
         {
@@ -78,7 +83,8 @@ namespace ThePathBot
                 StringPrefixes = new string[] { configJson.Prefix },
                 EnableMentionPrefix = true,
                 EnableDms = false,
-                DmHelp = true
+                DmHelp = false,
+                IgnoreExtraArguments = true,
             };
 
             Commands = Client.UseCommandsNext(commandsConfig);
@@ -97,6 +103,9 @@ namespace ThePathBot
             Commands.RegisterCommands<Villager>();
             Commands.RegisterCommands<Fish>();
             Commands.RegisterCommands<Emoji>();
+            Commands.RegisterCommands<TipUser>();
+            Commands.RegisterCommands<Queue>();
+            Commands.RegisterCommands<TipHistory>();
             // Commands.RegisterCommands<FunCommands>();
 
             await Client.ConnectAsync();
@@ -106,18 +115,7 @@ namespace ThePathBot
 
         private async Task Client_MessageCreated(MessageCreateEventArgs e)
         {
-            //return;
-            if (e.Channel.Id == 742996544680099931 && e.Message.Author.Id != 648636613286690836)
-            {
-                string message = e.Message.Content;
-                bool isANumber = int.TryParse(message, out int number);
-                number++;
-                if (isANumber)
-                {
-                    await e.Channel.SendMessageAsync(number.ToString()).ConfigureAwait(false);
-                }
-            }
-            /* if (e.Channel.Id == 742996544680099931)
+             if (e.Channel.Id == 744753163558584320)
             {
                 string message = e.Message.Content;
                 bool isANumber = int.TryParse(message, out int number);
@@ -156,7 +154,7 @@ namespace ThePathBot
                     }
                     Console.Out.WriteLine("Current number is " + countNumber);
                 }
-            } */
+            }
         }
 
         private Task OnClientReady(ReadyEventArgs e)

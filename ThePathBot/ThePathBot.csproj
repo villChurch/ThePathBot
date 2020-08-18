@@ -163,6 +163,11 @@
     <Compile Include="Handlers\Dialogue\Steps\DialogueStepBase.cs" />
     <Compile Include="Handlers\Dialogue\Steps\ReactionStep.cs" />
     <Compile Include="Handlers\Dialogue\DialogueHandler.cs" />
+    <Compile Include="Commands\ModMail\ModMail.cs" />
+    <Compile Include="Commands\TipSystem\TipUser.cs" />
+    <Compile Include="Commands\QueueCommands\Queue.cs" />
+    <Compile Include="Commands\TipSystem\TipHistory.cs" />
+    <Compile Include="Models\Tip.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
@@ -179,6 +184,9 @@
     <Folder Include="Handlers\" />
     <Folder Include="Handlers\Dialogue\" />
     <Folder Include="Handlers\Dialogue\Steps\" />
+    <Folder Include="Commands\ModMail\" />
+    <Folder Include="Commands\TipSystem\" />
+    <Folder Include="Commands\QueueCommands\" />
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
 </Project>

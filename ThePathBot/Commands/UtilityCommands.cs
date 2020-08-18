@@ -17,7 +17,7 @@ namespace ThePathBot.Commands
     {
         private string configFilePath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
         private string botLink =
-            "https://discord.com/oauth2/authorize?client_id=741036620912001045&permissions=523328&scope=bot";
+            "https://discord.com/oauth2/authorize?client_id=741036620912001045&permissions=1544551670&scope=bot";
 
         [Command("guide")]
         [Description("Returns a brief guide on how to use the bot")]
@@ -52,6 +52,8 @@ namespace ThePathBot.Commands
 
         [Command("invite")]
         [Description("Give an invite link for this bot")]
+        [RequireOwner]
+        [Hidden]
         public async Task getInviteLink(CommandContext ctx)
         {
             var owner = await ctx.Guild.GetMemberAsync(272151652344266762);
