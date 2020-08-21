@@ -33,6 +33,7 @@ namespace ThePathBot
         private static string configFilePath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
 
         private static readonly DateTime UnixEpoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        private int totalMembers = 0;
 
         public Bot()
         {
@@ -185,7 +186,7 @@ namespace ThePathBot
 
         private async Task Client_MessageCreated(MessageCreateEventArgs e)
         {
-            if (e.Channel.Id == 744753163558584320)
+            if (e.Channel.Id == 744753163558584320 && e.Client.CurrentUser.Id != 648636613286690836)
             {
                 string message = e.Message.Content;
                 bool isANumber = int.TryParse(message, out int number);
@@ -231,14 +232,14 @@ namespace ThePathBot
         {
             // let's log the fact that this event occured
             e.Client.DebugLogger.LogMessage(LogLevel.Info, "The Path", "Client is ready to process events.", DateTime.Now);
-
             return Task.CompletedTask;
         }
 
-        private Task Client_GuildAvailable(GuildCreateEventArgs e)
+        private async Task Client_GuildAvailable(GuildCreateEventArgs e)
         {
             e.Client.DebugLogger.LogMessage(LogLevel.Info, "The Path", $"Guild available: {e.Guild.Name}", DateTime.Now);
-            return Task.CompletedTask;
+            await UpdatePresenceAsync(e, e.Guild.MemberCount);
+            //return Task.CompletedTask;
         }
 
         private Task Client_ClientError(ClientErrorEventArgs e)
@@ -284,6 +285,21 @@ namespace ThePathBot
                     Color = new DiscordColor(0xFF0000) // red
                 };
                 await e.Context.RespondAsync("", embed: embed);
+            }
+        }
+
+        private async Task UpdatePresenceAsync(object _, int amount)
+        {
+            GuildCreateEventArgs e = _ as GuildCreateEventArgs;
+
+            totalMembers += amount;
+            try
+            {
+                await e.Client.UpdateStatusAsync(new DiscordActivity($"Keeper of Paths for {totalMembers} users"), UserStatus.Online, null);
+            }
+            catch (Exception ex)
+            {
+                //client.DebugLogger.LogMessage(LogLevel.Error, LOG_TAG, $"Could not update presence ({ex.GetType()}: {ex.Message})", DateTime.Now);
             }
         }
     }

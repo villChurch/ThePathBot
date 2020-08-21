@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using DSharpPlus.CommandsNext;
 using DSharpPlus.CommandsNext.Attributes;
+using DSharpPlus.CommandsNext.Exceptions;
 using DSharpPlus.Entities;
 using MySql.Data.MySqlClient;
 using Newtonsoft.Json;
@@ -250,6 +251,19 @@ namespace ThePathBot.Commands
             Stream emojiImage = new MemoryStream(res);
             await ctx.Guild.CreateEmojiAsync(emojiName, emojiImage).ConfigureAwait(false);
             await ctx.Channel.SendMessageAsync("Added emoji called :" + emojiName + ":").ConfigureAwait(false);
+        }
+
+        [Command("sudo"), Description("Executes a command as another user."), Hidden, RequireOwner]
+        public async Task SudoAsync(CommandContext ctx, [Description("Member to execute the command as.")] DiscordMember member, [RemainingText, Description("Command text to execute.")] string command)
+        {
+            Command cmd = ctx.CommandsNext.FindCommand(command, out var args);
+            if (cmd == null)
+            {
+                throw new CommandNotFoundException(command);
+            }
+
+            CommandContext fctx = ctx.CommandsNext.CreateFakeContext(member, ctx.Channel, command, ctx.Prefix, cmd, args);
+            await ctx.CommandsNext.ExecuteCommandAsync(fctx);
         }
     }
 

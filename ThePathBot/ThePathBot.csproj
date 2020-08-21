@@ -168,6 +168,7 @@
     <Compile Include="Commands\QueueCommands\Queue.cs" />
     <Compile Include="Commands\TipSystem\TipHistory.cs" />
     <Compile Include="Models\Tip.cs" />
+    <Compile Include="Utilities\AlphaNumericStringGenerator.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
