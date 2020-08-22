@@ -15,6 +15,8 @@ namespace ThePathBot.Commands.QueueCommands
 {
     public class Queue : BaseCommandModule
     {
+        private readonly ulong privateChannelGroup = 745024494464270448;
+        private readonly ulong turnipPostChannel = 744733259748999270;
         private readonly string configFilePath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
         private readonly DiscordEmbedBuilder sessionEmbed = new DiscordEmbedBuilder
         {
@@ -41,7 +43,7 @@ namespace ThePathBot.Commands.QueueCommands
             }
             //first we must create a private channel
             Guid guid = Guid.NewGuid();
-            var newChannel = await ctx.Guild.CreateChannelAsync(guid.ToString(), DSharpPlus.ChannelType.Text, ctx.Guild.GetChannel(744273831602028645));
+            var newChannel = await ctx.Guild.CreateChannelAsync(guid.ToString(), DSharpPlus.ChannelType.Text, ctx.Guild.GetChannel(privateChannelGroup));
             //Then give the user access to the channel
             await newChannel.AddOverwriteAsync(ctx.Member, DSharpPlus.Permissions.AccessChannels);
 
@@ -169,30 +171,14 @@ namespace ThePathBot.Commands.QueueCommands
         [Hidden]
         public async Task ShowQueueCommand(CommandContext ctx)
         {
-            if (ctx.Channel.Parent.Id != 744273831602028645)
+            if (ctx.Channel.Parent.Id != privateChannelGroup)
             {
                 await ctx.Channel.SendMessageAsync("You can only run this command from a private queue channel").ConfigureAwait(false);
                 return;
             }
             try
             {
-                DBConnection dbCon = DBConnection.Instance();
-                string json = string.Empty;
-
-                using (FileStream fs =
-                    File.OpenRead(configFilePath + "/config.json")
-                )
-                using (StreamReader sr = new StreamReader(fs, new UTF8Encoding(false)))
-                {
-                    json = await sr.ReadToEndAsync().ConfigureAwait(false);
-                }
-
-                ConfigJson configJson = JsonConvert.DeserializeObject<ConfigJson>(json);
-                dbCon.DatabaseName = configJson.databaseName;
-                dbCon.Password = configJson.databasePassword;
-                dbCon.databaseUser = configJson.databaseUser;
-                dbCon.databasePort = configJson.databasePort;
-                MySqlConnection connection = new MySqlConnection(dbCon.connectionString);
+                MySqlConnection connection = await GetDBConnectionAsync();
                 string query = "SELECT DiscordID, onisland from pathQueuers WHERE queueChannelID = ?channelID AND visited = 0 ORDER BY TimeJoined ASC";
                 MySqlCommand command = new MySqlCommand(query, connection);
                 command.Parameters.Add("?channelID", MySqlDbType.VarChar, 40).Value = ctx.Channel.Id;
@@ -278,23 +264,7 @@ namespace ThePathBot.Commands.QueueCommands
 
             try
             {
-                DBConnection dbCon = DBConnection.Instance();
-                string json = string.Empty;
-
-                using (FileStream fs =
-                    File.OpenRead(configFilePath + "/config.json")
-                )
-                using (StreamReader sr = new StreamReader(fs, new UTF8Encoding(false)))
-                {
-                    json = await sr.ReadToEndAsync().ConfigureAwait(false);
-                }
-
-                ConfigJson configJson = JsonConvert.DeserializeObject<ConfigJson>(json);
-                dbCon.DatabaseName = configJson.databaseName;
-                dbCon.Password = configJson.databasePassword;
-                dbCon.databaseUser = configJson.databaseUser;
-                dbCon.databasePort = configJson.databasePort;
-                MySqlConnection connection = new MySqlConnection(dbCon.connectionString);
+                MySqlConnection connection = await GetDBConnectionAsync();
                 string query = "SELECT privateChannelID from pathQueues WHERE sessionCode = ?sessionCode and active = 1";
                 MySqlCommand command = new MySqlCommand(query, connection);
                 command.Parameters.Add("?sessionCode", MySqlDbType.VarChar, 5).Value = code.ToUpper();
@@ -358,23 +328,7 @@ namespace ThePathBot.Commands.QueueCommands
                     await ctx.Channel.SendMessageAsync("No active queues match this code").ConfigureAwait(false);
                     return;
                 }
-                DBConnection dbCon = DBConnection.Instance();
-                string json = string.Empty;
-
-                using (FileStream fs =
-                    File.OpenRead(configFilePath + "/config.json")
-                )
-                using (StreamReader sr = new StreamReader(fs, new UTF8Encoding(false)))
-                {
-                    json = await sr.ReadToEndAsync().ConfigureAwait(false);
-                }
-
-                ConfigJson configJson = JsonConvert.DeserializeObject<ConfigJson>(json);
-                dbCon.DatabaseName = configJson.databaseName;
-                dbCon.Password = configJson.databasePassword;
-                dbCon.databaseUser = configJson.databaseUser;
-                dbCon.databasePort = configJson.databasePort;
-                MySqlConnection connection = new MySqlConnection(dbCon.connectionString);
+                MySqlConnection connection = await GetDBConnectionAsync();
                 MySqlCommand command = new MySqlCommand("RemoveFromQueue", connection)
                 {
                     CommandType = System.Data.CommandType.StoredProcedure
@@ -398,30 +352,14 @@ namespace ThePathBot.Commands.QueueCommands
         [Hidden]
         public async Task SendDodoCode(CommandContext ctx)
         {
-            if (ctx.Channel.Parent.Id != 744273831602028645)
+            if (ctx.Channel.Parent.Id != privateChannelGroup)
             {
                 await ctx.Channel.SendMessageAsync("You can only run this command from a private queue channel").ConfigureAwait(false);
                 return;
             }
             try
             {
-                DBConnection dbCon = DBConnection.Instance();
-                string json = string.Empty;
-
-                using (FileStream fs =
-                    File.OpenRead(configFilePath + "/config.json")
-                )
-                using (StreamReader sr = new StreamReader(fs, new UTF8Encoding(false)))
-                {
-                    json = await sr.ReadToEndAsync().ConfigureAwait(false);
-                }
-
-                ConfigJson configJson = JsonConvert.DeserializeObject<ConfigJson>(json);
-                dbCon.DatabaseName = configJson.databaseName;
-                dbCon.Password = configJson.databasePassword;
-                dbCon.databaseUser = configJson.databaseUser;
-                dbCon.databasePort = configJson.databasePort;
-                MySqlConnection connection = new MySqlConnection(dbCon.connectionString);
+                MySqlConnection connection = await GetDBConnectionAsync();
                 string query = "SELECT dodoCode, message, maxVisitorsAtOnce from pathQueues WHERE privateChannelID = ?channelid AND queueOwner = ?owner AND active = 1";
                 var command = new MySqlCommand(query, connection);
                 command.Parameters.Add("?channelid", MySqlDbType.VarChar, 40).Value = ctx.Channel.Id;
@@ -508,23 +446,7 @@ namespace ThePathBot.Commands.QueueCommands
         {
             try
             {
-                DBConnection dbCon = DBConnection.Instance();
-                string json = string.Empty;
-
-                using (FileStream fs =
-                    File.OpenRead(configFilePath + "/config.json")
-                )
-                using (StreamReader sr = new StreamReader(fs, new UTF8Encoding(false)))
-                {
-                    json = await sr.ReadToEndAsync().ConfigureAwait(false);
-                }
-
-                ConfigJson configJson = JsonConvert.DeserializeObject<ConfigJson>(json);
-                dbCon.DatabaseName = configJson.databaseName;
-                dbCon.Password = configJson.databasePassword;
-                dbCon.databaseUser = configJson.databaseUser;
-                dbCon.databasePort = configJson.databasePort;
-                MySqlConnection connection = new MySqlConnection(dbCon.connectionString);
+                MySqlConnection connection = await GetDBConnectionAsync();
                 string query = "UPDATE pathQueues SET active = 0 WHERE privateChannelID = ?channelID";
                 var command = new MySqlCommand(query, connection);
                 command.Parameters.Add("?channelID", MySqlDbType.VarChar, 40).Value = ctx.Channel.Id;
@@ -564,25 +486,45 @@ namespace ThePathBot.Commands.QueueCommands
             }
         }
 
+        [Command("updatedodo")]
+        [Hidden]
+        public async Task UpdateDodoCode(CommandContext ctx, string newcode)
+        {
+            if (ctx.Channel.Parent.Id != privateChannelGroup)
+            {
+                await ctx.Channel.SendMessageAsync("You can only run this command from a private queue channel").ConfigureAwait(false);
+                return;
+            }
+            if (newcode.Length != 5)
+            {
+                await ctx.Channel.SendMessageAsync("Dodo codes must be 5 characters long.").ConfigureAwait(false);
+                return;
+            }
+            try
+            {
+                MySqlConnection connection = await GetDBConnectionAsync();
+                string query = "UPDATE pathQueues SET dodoCode = ?newcode WHERE privateChannelID = ?currentChannel";
+                var command = new MySqlCommand(query, connection);
+                command.Parameters.Add("?newcode", MySqlDbType.VarChar, 5).Value = newcode;
+                command.Parameters.Add("?currentChannel", MySqlDbType.VarChar, 40).Value = ctx.Channel.Id;
+                connection.Open();
+                command.ExecuteNonQuery();
+                connection.Close();
+
+                await ctx.Channel.SendMessageAsync($"Dodo code is now updated to {newcode}").ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Console.Out.WriteLine(ex.Message);
+                Console.Out.WriteLine(ex.StackTrace);
+                await ctx.Channel.SendMessageAsync($"There was an error updating your dodo code, " +
+                    $"if this persists please contact an admin or mod for help.").ConfigureAwait(false);
+            }
+        }
+
         private async Task MoveUsersToOnIsland(List<ulong> discordIDs, ulong channelId)
         {
-            DBConnection dbCon = DBConnection.Instance();
-            string json = string.Empty;
-
-            using (FileStream fs =
-                File.OpenRead(configFilePath + "/config.json")
-            )
-            using (StreamReader sr = new StreamReader(fs, new UTF8Encoding(false)))
-            {
-                json = await sr.ReadToEndAsync().ConfigureAwait(false);
-            }
-
-            ConfigJson configJson = JsonConvert.DeserializeObject<ConfigJson>(json);
-            dbCon.DatabaseName = configJson.databaseName;
-            dbCon.Password = configJson.databasePassword;
-            dbCon.databaseUser = configJson.databaseUser;
-            dbCon.databasePort = configJson.databasePort;
-            MySqlConnection connection = new MySqlConnection(dbCon.connectionString);
+            MySqlConnection connection = await GetDBConnectionAsync();
             string query = "UPDATE pathQueuers SET onisland = 1 WHERE DiscordID = ?discordid AND queueChannelID = ?channelId";
             foreach (var user in discordIDs)
             {
@@ -596,23 +538,7 @@ namespace ThePathBot.Commands.QueueCommands
         }
         private async Task<int> GetMaxVisitorsAtOnceFromCode(string code)
         {
-            DBConnection dbCon = DBConnection.Instance();
-            string json = string.Empty;
-
-            using (FileStream fs =
-                File.OpenRead(configFilePath + "/config.json")
-            )
-            using (StreamReader sr = new StreamReader(fs, new UTF8Encoding(false)))
-            {
-                json = await sr.ReadToEndAsync().ConfigureAwait(false);
-            }
-
-            ConfigJson configJson = JsonConvert.DeserializeObject<ConfigJson>(json);
-            dbCon.DatabaseName = configJson.databaseName;
-            dbCon.Password = configJson.databasePassword;
-            dbCon.databaseUser = configJson.databaseUser;
-            dbCon.databasePort = configJson.databasePort;
-            MySqlConnection connection = new MySqlConnection(dbCon.connectionString);
+            MySqlConnection connection = await GetDBConnectionAsync();
             string query = "SELECT maxVisitorsAtOnce from pathQueues WHERE sessionCode = ?sessionCode";
             MySqlCommand command = new MySqlCommand(query, connection);
             command.Parameters.Add("?sessionCode", MySqlDbType.VarChar, 5).Value = code.ToUpper();
@@ -637,23 +563,7 @@ namespace ThePathBot.Commands.QueueCommands
 
         private async Task<bool> CheckIfUserInQueue(ulong userid, ulong channelid)
         {
-            DBConnection dbCon = DBConnection.Instance();
-            string json = string.Empty;
-
-            using (FileStream fs =
-                File.OpenRead(configFilePath + "/config.json")
-            )
-            using (StreamReader sr = new StreamReader(fs, new UTF8Encoding(false)))
-            {
-                json = await sr.ReadToEndAsync().ConfigureAwait(false);
-            }
-
-            ConfigJson configJson = JsonConvert.DeserializeObject<ConfigJson>(json);
-            dbCon.DatabaseName = configJson.databaseName;
-            dbCon.Password = configJson.databasePassword;
-            dbCon.databaseUser = configJson.databaseUser;
-            dbCon.databasePort = configJson.databasePort;
-            MySqlConnection connection = new MySqlConnection(dbCon.connectionString);
+            MySqlConnection connection = await GetDBConnectionAsync();
             string query = "SELECT * from pathQueuers WHERE DiscordID = ?userid AND queueChannelID = ?channelid AND visited = 0";
             MySqlCommand command = new MySqlCommand(query, connection);
             command.Parameters.Add("?userid", MySqlDbType.VarChar, 40).Value = userid;
@@ -669,27 +579,16 @@ namespace ThePathBot.Commands.QueueCommands
 
         private async Task<ulong> GetPrivateChannelFromCode(string code)
         {
-            DBConnection dbCon = DBConnection.Instance();
-            string json = string.Empty;
+            return await GetPrivateChannelFromCode(code, true);
+        }
 
-            using (FileStream fs =
-                File.OpenRead(configFilePath + "/config.json")
-            )
-            using (StreamReader sr = new StreamReader(fs, new UTF8Encoding(false)))
-            {
-                json = await sr.ReadToEndAsync().ConfigureAwait(false);
-            }
-
-            ConfigJson configJson = JsonConvert.DeserializeObject<ConfigJson>(json);
-            dbCon.DatabaseName = configJson.databaseName;
-            dbCon.Password = configJson.databasePassword;
-            dbCon.databaseUser = configJson.databaseUser;
-            dbCon.databasePort = configJson.databasePort;
-            MySqlConnection connection = new MySqlConnection(dbCon.connectionString);
-            string query = "SELECT privateChannelID from pathQueues WHERE sessionCode = ?sessionCode";
+        private async Task<ulong> GetPrivateChannelFromCode(string code, bool active)
+        {
+            MySqlConnection connection = await GetDBConnectionAsync();
+            string query = "SELECT privateChannelID from pathQueues WHERE sessionCode = ?sessionCode AND active = ?active";
             MySqlCommand command = new MySqlCommand(query, connection);
             command.Parameters.Add("?sessionCode", MySqlDbType.VarChar, 5).Value = code.ToUpper();
-
+            command.Parameters.Add("?active", MySqlDbType.VarChar).Value = active == true ? 1 : 0;
             ulong queueChannelId = 0;
 
             connection.Open();
@@ -718,7 +617,7 @@ namespace ThePathBot.Commands.QueueCommands
                 ImageUrl = attachment,
                 Description = $"To join type ```?join {sessionCode}```"
             };
-            var postChannel = ctx.Guild.GetChannel(744644693479915591);
+            var postChannel = ctx.Guild.GetChannel(turnipPostChannel);
             var queueMsg = await postChannel.SendMessageAsync(embed: queueEmbed).ConfigureAwait(false);
 
             await InsertQueueIntoDBAsync(ctx.User.Id, queueMsg.Id, channel.Id, int.Parse(maxSize), dodoCode, sessionCode, message);
@@ -728,23 +627,7 @@ namespace ThePathBot.Commands.QueueCommands
             ulong queueOwner, ulong queueMessageID, ulong privateChannel, int maxVisitors, string dodoCode, string sessionCode, string message)
         {
 
-            DBConnection dbCon = DBConnection.Instance();
-            string json = string.Empty;
-
-            using (FileStream fs =
-                File.OpenRead(configFilePath + "/config.json")
-            )
-            using (StreamReader sr = new StreamReader(fs, new UTF8Encoding(false)))
-            {
-                json = await sr.ReadToEndAsync().ConfigureAwait(false);
-            }
-
-            ConfigJson configJson = JsonConvert.DeserializeObject<ConfigJson>(json);
-            dbCon.DatabaseName = configJson.databaseName;
-            dbCon.Password = configJson.databasePassword;
-            dbCon.databaseUser = configJson.databaseUser;
-            dbCon.databasePort = configJson.databasePort;
-            MySqlConnection connection = new MySqlConnection(dbCon.connectionString);
+            MySqlConnection connection = await GetDBConnectionAsync();
             string query = "INSERT INTO pathQueues (queueOwner, queueMessageID, privateChannelID, maxVisitorsAtOnce, dodoCode, sessionCode, message) " +
                 "VALUES (?queueOwner, ?queueMessage, ?privateChannel, ?maxVisitors, ?dodoCode, ?sessionCode, ?message)";
             MySqlCommand command = new MySqlCommand(query, connection);
@@ -762,23 +645,7 @@ namespace ThePathBot.Commands.QueueCommands
 
         private async Task MakeQueueInactive(ulong queueMessageID)
         {
-            DBConnection dbCon = DBConnection.Instance();
-            string json = string.Empty;
-
-            using (FileStream fs =
-                File.OpenRead(configFilePath + "/config.json")
-            )
-            using (StreamReader sr = new StreamReader(fs, new UTF8Encoding(false)))
-            {
-                json = await sr.ReadToEndAsync().ConfigureAwait(false);
-            }
-
-            ConfigJson configJson = JsonConvert.DeserializeObject<ConfigJson>(json);
-            dbCon.DatabaseName = configJson.databaseName;
-            dbCon.Password = configJson.databasePassword;
-            dbCon.databaseUser = configJson.databaseUser;
-            dbCon.databasePort = configJson.databasePort;
-            MySqlConnection connection = new MySqlConnection(dbCon.connectionString);
+            MySqlConnection connection = await GetDBConnectionAsync();
             string query = "UPDATE pathQueues SET active = 0 WHERE queueMessageID = ?queueMessage";
             MySqlCommand command = new MySqlCommand(query, connection);
             command.Parameters.Add("?queueMessage", MySqlDbType.VarChar, 40).Value = queueMessageID.ToString();
@@ -788,6 +655,18 @@ namespace ThePathBot.Commands.QueueCommands
         }
 
         private async Task AddMemberToQueue(ulong discordID, ulong queueChannelID)
+        {
+            MySqlConnection connection = await GetDBConnectionAsync();
+            string query = "INSERT INTO pathQueuers (DiscordID, queueChannelID) VALUES (?discordID, ?queueChannelID)";
+            MySqlCommand command = new MySqlCommand(query, connection);
+            command.Parameters.Add("?discordID", MySqlDbType.VarChar, 40).Value = discordID.ToString();
+            command.Parameters.Add("?queueChannelID", MySqlDbType.VarChar, 40).Value = queueChannelID.ToString();
+            connection.Open();
+            command.ExecuteNonQuery();
+            connection.Close();
+        }
+
+        private async Task<MySqlConnection> GetDBConnectionAsync()
         {
             DBConnection dbCon = DBConnection.Instance();
             string json = string.Empty;
@@ -806,13 +685,7 @@ namespace ThePathBot.Commands.QueueCommands
             dbCon.databaseUser = configJson.databaseUser;
             dbCon.databasePort = configJson.databasePort;
             MySqlConnection connection = new MySqlConnection(dbCon.connectionString);
-            string query = "INSERT INTO pathQueuers (DiscordID, queueChannelID) VALUES (?discordID, ?queueChannelID)";
-            MySqlCommand command = new MySqlCommand(query, connection);
-            command.Parameters.Add("?discordID", MySqlDbType.VarChar, 40).Value = discordID.ToString();
-            command.Parameters.Add("?queueChannelID", MySqlDbType.VarChar, 40).Value = queueChannelID.ToString();
-            connection.Open();
-            command.ExecuteNonQuery();
-            connection.Close();
+            return connection;
         }
     }
 }
