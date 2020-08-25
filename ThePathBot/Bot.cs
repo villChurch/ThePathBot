@@ -15,7 +15,6 @@ using ThePathBot.Commands;
 using ThePathBot.Commands.UrbanDictionary;
 using ThePathBot.Commands.ACNHCommands;
 using ThePathBot.Commands.Admin;
-using System.Collections.Generic;
 using ThePathBot.Commands.TipSystem;
 using ThePathBot.Commands.QueueCommands;
 using ThePathBot.Utilities;
@@ -30,7 +29,9 @@ namespace ThePathBot
         public InteractivityConfiguration Interactivity { get; private set; }
         private int countNumber = GetCountNumberOnRestart();
         private ulong lastCountId { get; set; }
-        private static string configFilePath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+        private static readonly string configFilePath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+        private readonly ulong daisymaeChannelId = 744733207148232845;
+        private readonly ulong nookShopChannelId =  744733259748999270; // test channel 746852898465644544;
 
         private static readonly DateTime UnixEpoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         private int totalMembers = 0;
@@ -186,7 +187,27 @@ namespace ThePathBot
 
         private async Task Client_MessageCreated(MessageCreateEventArgs e)
         {
-            if (e.Channel.Id == 744753163558584320 && e.Client.CurrentUser.Id != 648636613286690836)
+            if (e.Channel.Id == daisymaeChannelId || e.Channel.Id == nookShopChannelId)
+            {
+                if (e.Author.IsBot)
+                {
+                    return;
+                }
+
+                if (!(e.Message.Attachments.Count > 0) || e.Message.Embeds.Count > 0)
+                {
+                    await e.Message.DeleteAsync();
+                    var embed = new DiscordEmbedBuilder
+                    {
+                        Title = "Channel is Image only",
+                        Description = $"{e.Message.Author.Mention} " +
+                        $"All posts in this channel must have an image attached to them or be an embed",
+                        Color = DiscordColor.Red
+                    };
+                    await e.Channel.SendMessageAsync(embed: embed).ConfigureAwait(false);
+                }
+            }
+            else if (e.Channel.Id == 744753163558584320 && e.Client.CurrentUser.Id != 648636613286690836)
             {
                 string message = e.Message.Content;
                 bool isANumber = int.TryParse(message, out int number);
