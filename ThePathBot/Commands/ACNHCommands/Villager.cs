@@ -14,18 +14,18 @@ namespace ThePathBot.Commands.ACNHCommands
         [Command ("villager")]
         public async Task getVillager(CommandContext ctx, params string[] villagerInput)
         {
-            if (ctx.Guild.Id == 694013861560320081)
-            {
-                var embed = new DiscordEmbedBuilder
-                {
-                    Title = "Wuh-oh!",
-                    Description = "Sorry... This command cannot be run in this server.",
-                    Color = DiscordColor.Blurple
-                };
-                await ctx.Channel.SendMessageAsync(embed: embed).ConfigureAwait(false);
-                return;
-            }
-            string villager = String.Join(" ", villagerInput);
+            //if (ctx.Guild.Id == 694013861560320081)
+            //{
+            //    var embed = new DiscordEmbedBuilder
+            //    {
+            //        Title = "Wuh-oh!",
+            //        Description = "Sorry... This command cannot be run in this server.",
+            //        Color = DiscordColor.Blurple
+            //    };
+            //    await ctx.Channel.SendMessageAsync(embed: embed).ConfigureAwait(false);
+            //    return;
+            //}
+            string villager = string.Join(" ", villagerInput);
             if (villager.ToLower() == "Lil J with the eyes".ToLower())
             {
                 villager = "Judy";
@@ -55,7 +55,6 @@ namespace ThePathBot.Commands.ACNHCommands
                 }
             }
 
-            Console.Out.WriteLine("http://williamspires.co.uk:9876/villagers/" + responseVillager.Filename + ".png");
             var villagerEmbed = new DiscordEmbedBuilder
             {
                 Title = responseVillager.Name,

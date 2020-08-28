@@ -90,16 +90,17 @@ namespace ThePathBot.Commands.TipSystem
 
                     int newTotal = GetTotal(user, connection);
                     UpdateTotal(user, newTotal, connection);
+                    DiscordMember recipient = await ctx.Guild.GetMemberAsync(user);
                     DiscordEmbedBuilder repEmbed = new DiscordEmbedBuilder
                     {
-                        Title = $"{ctx.Guild.GetMemberAsync(user).Result.DisplayName} gained one tip from {ctx.Member.DisplayName}",
+                        Title = $"{recipient.DisplayName} gained one tip from {ctx.Member.DisplayName}",
                         Description = $"{ctx.Member.DisplayName} said: {message}",
                         Footer = new DiscordEmbedBuilder.EmbedFooter
                         {
-                            Text = $"{ctx.Guild.GetMemberAsync(user).Result.DisplayName} now has {newTotal} tips."
+                            Text = $"{recipient.DisplayName} now has {newTotal} tips."
                         },
                         Color = DiscordColor.Blurple,
-                        ThumbnailUrl = ctx.Guild.GetMemberAsync(user).Result.AvatarUrl
+                        ThumbnailUrl = recipient.AvatarUrl
                     };
                     if (ctx.Guild.Channels.ContainsKey(744820641085259856))
                     {
@@ -181,11 +182,11 @@ namespace ThePathBot.Commands.TipSystem
             DiscordUser userToTip = mentionedUser[0];
 
             int currentTotal = GetTotal(userToTip.Id, connection) - 1;
-
+            DiscordMember recipient = await ctx.Guild.GetMemberAsync(userToTip.Id);
             UpdateTotal(userToTip.Id, currentTotal + numberToGive, connection);
 
             await ctx.Channel.SendMessageAsync($"Succesfully given " +
-                $"{ctx.Guild.GetMemberAsync(userToTip.Id).Result.DisplayName} {numberToGive} tips.").ConfigureAwait(false);
+                $"{recipient.DisplayName} {numberToGive} tips.").ConfigureAwait(false);
         }
 
         [Command("showtips")]
@@ -340,18 +341,19 @@ namespace ThePathBot.Commands.TipSystem
 
         private async void UpdateRoles(int newTotal, ulong user, CommandContext ctx)
         {
+            DiscordMember recipient = await ctx.Guild.GetMemberAsync(user);
             switch (newTotal)
             {
                 case 50:
-                    var embed = new DiscordEmbedBuilder
+                    DiscordEmbedBuilder embed = new DiscordEmbedBuilder
                     {
-                        Description = $":tada: {ctx.Guild.GetMemberAsync(user).Result.DisplayName} has reached 50 tips!",
+                        Description = $":tada: {recipient.DisplayName} has reached 50 tips!",
                         Color = DiscordColor.Blurple
                     };
                     if (ctx.Guild.Roles.ContainsKey(744722781106733077))
                     {
                         DiscordRole role = ctx.Guild.GetRole(744722781106733077);
-                        await ctx.Guild.GetMemberAsync(user).Result.GrantRoleAsync(role, "Made 50 reviews").ConfigureAwait(false);
+                        await recipient.GrantRoleAsync(role, "Made 50 reviews").ConfigureAwait(false);
                         await ctx.Guild.GetChannel(744731248416784545).SendMessageAsync(embed: embed).ConfigureAwait(false);
 
                     }
@@ -359,11 +361,10 @@ namespace ThePathBot.Commands.TipSystem
                     {
                         await ctx.Channel.SendMessageAsync(embed: embed).ConfigureAwait(false);
                     }
-                    //await ctx.Guild.GetMemberAsync(user).Result.GrantRoleAsync().ConfigureAwait(false); give 50 tip role
                     break;
 
                 case 100:
-                    //await ctx.Guild.GetMemberAsync(user).Result.GrantRoleAsync().ConfigureAwait(false); give 100 tip role
+                    //await recipient.GrantRoleAsync().ConfigureAwait(false); give 100 tip role
                     break;
 
                 default:

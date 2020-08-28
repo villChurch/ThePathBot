@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Timers;
@@ -10,14 +11,15 @@ using DSharpPlus.Entities;
 using DSharpPlus.Interactivity;
 using MySql.Data.MySqlClient;
 using Newtonsoft.Json;
+using ThePathBot.Models;
 using ThePathBot.Utilities;
 
 namespace ThePathBot.Commands.QueueCommands
 {
     public class Queue : BaseCommandModule
     {
-        private readonly ulong privateChannelGroup = 745024494464270448;
-        private readonly ulong turnipPostChannel = 744733259748999270;
+        private readonly ulong privateChannelGroup = 745024494464270448; //test server 744273831602028645;
+        private readonly ulong turnipPostChannel = 744733259748999270; //test server 744644693479915591;
         private readonly string configFilePath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
         private Timer msgDestructTimer;
         private readonly DiscordEmbedBuilder sessionEmbed = new DiscordEmbedBuilder
@@ -32,7 +34,7 @@ namespace ThePathBot.Commands.QueueCommands
         {
             msgDestructTimer = new Timer
             {
-                Interval = 15000 // 15 seconds
+                Interval = 5000 // 5 seconds
             };
             msgDestructTimer.Elapsed += (sender, e) => DestructMessage(sender, e, msg);
             msgDestructTimer.AutoReset = true;
@@ -199,68 +201,99 @@ namespace ThePathBot.Commands.QueueCommands
             try
             {
                 MySqlConnection connection = await GetDBConnectionAsync();
-                string query = "SELECT DiscordID, onisland from pathQueuers WHERE queueChannelID = ?channelID AND visited = 0 ORDER BY TimeJoined ASC";
+                string query = "SELECT DiscordID, onisland, GroupNumber, PlaceInGroup from pathQueuers WHERE " +
+                    "queueChannelID = ?channelID AND visited = 0 ORDER BY TimeJoined ASC, GroupNumber ASC, PlaceInGroup ASC";
                 MySqlCommand command = new MySqlCommand(query, connection);
                 command.Parameters.Add("?channelID", MySqlDbType.VarChar, 40).Value = ctx.Channel.Id;
-
-                List<ulong> discordIDs = new List<ulong>();
-                Dictionary<ulong, bool> queuers = new Dictionary<ulong, bool>();
+                List<QueueMember> queueMembers = new List<QueueMember>();
                 connection.Open();
-                var reader = command.ExecuteReader();
+                MySqlDataReader reader = command.ExecuteReader();
                 if (reader.HasRows)
                 {
                     while (reader.Read())
                     {
-                        discordIDs.Add(reader.GetUInt64("DiscordID"));
-                        if (!queuers.ContainsKey(reader.GetUInt64("DiscordID")))
-                        {
-                            queuers.Add(reader.GetUInt64("DiscordID"), reader.GetBoolean("onisland"));
-                        }
+                        QueueMember member = new QueueMember(reader.GetUInt64("DiscordID"), reader.GetBoolean("onIsland"),
+                            reader.GetInt32("GroupNumber"), reader.GetInt32("PlaceInGroup"));
+                        queueMembers.Add(member);
                     }
                 }
                 else
                 {
                     //no one in queue
                     await ctx.Channel.SendMessageAsync("Currently there is no one in your queue").ConfigureAwait(false);
+                    reader.Close();
+                    connection.Close();
                     return;
                 }
                 reader.Close();
                 connection.Close();
-                var embed = new DiscordEmbedBuilder
+
+                queueMembers.OrderBy(qm => qm.GroupNumber).ThenBy(qm => qm.PlaceInGroup).ToList();
+                List<QueueMember> onIslandMembers = queueMembers.FindAll(qm => qm.OnIsland == true).ToList();
+                queueMembers.RemoveAll(qm => onIslandMembers.Contains(qm));
+                DiscordEmbedBuilder embed = new DiscordEmbedBuilder
                 {
                     Title = "Users in your queue",
                     Color = DiscordColor.Blurple
                 };
 
                 List<Page> pagesEmbed = new List<Page>();
-                var onIslandPage = new Page();
-                var oisEmbed = new DiscordEmbedBuilder
+                if (onIslandMembers.Count > 0)
                 {
-                    Title = "On Island"
-                };
-                //foreach(var item in queuers.Keys)
-                //{
-                //    if (queuers[item])
-                //    {
-                //        oisEmbed.AddField("Member", ctx.Guild.GetMemberAsync(item).Result.DisplayName);
-                //        queuers.Remove(item);
-                //    }
-                //}
-                //onIslandPage.Embed = oisEmbed;
-                //pagesEmbed.Add(onIslandPage);
-
-                StringBuilder sb = new StringBuilder();
-                foreach(var item in queuers.Keys)
-                {
-                    var user = await ctx.Guild.GetMemberAsync(item);
-                    sb.AppendLine(user.DisplayName);
+                    Page onIslandPage = new Page();
+                    DiscordEmbedBuilder oisEmbed = new DiscordEmbedBuilder
+                    {
+                        Title = "On Island"
+                    };
+                    onIslandMembers.OrderBy(oim => oim.PlaceInGroup);
+                    foreach (QueueMember queueMember in onIslandMembers)
+                    {
+                        DiscordMember discordMember = await ctx.Guild.GetMemberAsync(queueMember.DiscordID);
+                        oisEmbed.AddField($"Position {queueMember.PlaceInGroup}", $"{discordMember.DisplayName}");
+                    }
+                    onIslandPage.Embed = oisEmbed;
+                    pagesEmbed.Add(onIslandPage);
                 }
-                var interactivty = ctx.Client.GetInteractivity();
+                if (queueMembers.Count > 0)
+                {
+                    Page page = new Page();
+                    DiscordEmbedBuilder pageEmbed = new DiscordEmbedBuilder();
+                    int currentGroup = 0;
+                    for (int i = 0; i < queueMembers.Count; i++)
+                    {
+                        DiscordMember queuerMember = await ctx.Guild.GetMemberAsync(queueMembers.ElementAt(i).DiscordID);
+                        if (queueMembers.ElementAt(i).GroupNumber != currentGroup)
+                        {
+                            if (currentGroup != 0)
+                            {
+                                page.Embed = pageEmbed;
+                                pagesEmbed.Add(page);
+                            }
+                            currentGroup = queueMembers.ElementAt(i).GroupNumber;
+                            page = new Page();
+                            pageEmbed = new DiscordEmbedBuilder
+                            {
+                                Title = $"Group {currentGroup}"
+                            };
+                        }
+                        pageEmbed.AddField($"Position {queueMembers.ElementAt(i).PlaceInGroup}", queuerMember.DisplayName);
+                        if ((i + 1) >= queueMembers.Count)
+                        {
+                            page.Embed = pageEmbed;
+                            pagesEmbed.Add(page);
+                        }
+                    }
+                }
 
-                var pages = interactivty.GeneratePagesInEmbed(sb.ToString(), SplitType.Line);
-                //pagesEmbed.AddRange(pages);
+                if (pagesEmbed.Count <= 0)
+                {
+                    await ctx.Channel.SendMessageAsync("Could not find anyone in your queue").ConfigureAwait(false);
+                    return;
+                }
 
-                await interactivty.SendPaginatedMessageAsync(ctx.Channel, ctx.Member, pages).ConfigureAwait(false);
+                InteractivityExtension interactivty = ctx.Client.GetInteractivity();
+
+                await interactivty.SendPaginatedMessageAsync(ctx.Channel, ctx.Member, pagesEmbed).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -269,6 +302,10 @@ namespace ThePathBot.Commands.QueueCommands
                 await ctx.Channel.SendMessageAsync("There has been an error while running this command. " +
                     "If this persists please contact a mod/admin for help.").ConfigureAwait(false);
             }
+            finally
+            {
+                await ctx.Message.DeleteAsync();
+            }
 
         }
 
@@ -276,10 +313,11 @@ namespace ThePathBot.Commands.QueueCommands
         [Hidden]
         public async Task JoinQueue(CommandContext ctx, string code)
         {
+            await ctx.Message.DeleteAsync();
             DiscordMessage joinMessage;
             if (code.Length != 5)
             {
-                joinMessage = await ctx.Channel.SendMessageAsync("This is not a valid code").ConfigureAwait(false);
+                joinMessage = await ctx.Channel.SendMessageAsync($"{ctx.Member.Mention} This is not a valid code").ConfigureAwait(false);
                 StartTimer(joinMessage);
                 return;
             }
@@ -304,8 +342,8 @@ namespace ThePathBot.Commands.QueueCommands
                 else
                 {
                     // invalid code
-                    joinMessage = await ctx.Channel.SendMessageAsync(
-                        "This is not a valid code or the queue is no longer active").ConfigureAwait(false);
+                    joinMessage = await ctx.Channel.SendMessageAsync($"{ctx.Member.Mention} " +
+                        $"This is not a valid code or the queue is no longer active").ConfigureAwait(false);
                     StartTimer(joinMessage);
                     reader.Close();
                     connection.Close();
@@ -315,12 +353,12 @@ namespace ThePathBot.Commands.QueueCommands
                 connection.Close();
                 if (await CheckIfUserInQueue(ctx.Member.Id, queueChannelId))
                 {
-                    joinMessage = await ctx.Channel.SendMessageAsync("You are already in this queue.").ConfigureAwait(false);
+                    joinMessage = await ctx.Channel.SendMessageAsync($"{ctx.Member.Mention} You are already in this queue.").ConfigureAwait(false);
                     StartTimer(joinMessage);
                     return;
                 }
-                await AddMemberToQueue(ctx.Member.Id, queueChannelId);
-                joinMessage  = await ctx.Channel.SendMessageAsync(
+                await AddMemberToQueue(ctx.Member.Id, queueChannelId, code);
+                joinMessage = await ctx.Channel.SendMessageAsync(
                     $"{ctx.Member.Mention} You have successfully joined the queue and will be DM'd when " +
                     "it's your turn.").ConfigureAwait(false);
                 StartTimer(joinMessage);
@@ -331,7 +369,8 @@ namespace ThePathBot.Commands.QueueCommands
             {
                 Console.Out.WriteLine(ex.Message);
                 Console.Out.WriteLine(ex.StackTrace);
-                joinMessage = await ctx.Channel.SendMessageAsync("There has been an error while running this command. " +
+                joinMessage = await ctx.Channel.SendMessageAsync($"{ctx.Member.Mention} " +
+                    $"There has been an error while running this command. " +
                     "If this persists please contact a mod/admin for help.").ConfigureAwait(false);
                 StartTimer(joinMessage);
             }
@@ -364,7 +403,9 @@ namespace ThePathBot.Commands.QueueCommands
                 connection.Open();
                 command.ExecuteNonQuery();
                 connection.Close();
-                await ctx.Channel.SendMessageAsync($"You are no longer in queue {code}.").ConfigureAwait(false);
+                var msg = await ctx.Channel.SendMessageAsync($"{ctx.Member.Mention} You are no longer in queue {code}.").ConfigureAwait(false);
+                StartTimer(msg);
+                await ctx.Message.DeleteAsync();
                 var queueChannel = ctx.Guild.GetChannel(privateChannel);
                 await queueChannel.SendMessageAsync($"{ctx.Member.DisplayName} has left your queue").ConfigureAwait(false);
             }
@@ -381,7 +422,8 @@ namespace ThePathBot.Commands.QueueCommands
         {
             if (ctx.Channel.Parent.Id != privateChannelGroup)
             {
-                await ctx.Channel.SendMessageAsync("You can only run this command from a private queue channel").ConfigureAwait(false);
+                var msg = await ctx.Channel.SendMessageAsync("You can only run this command from a private queue channel").ConfigureAwait(false);
+                StartTimer(msg);
                 return;
             }
             try
@@ -398,9 +440,10 @@ namespace ThePathBot.Commands.QueueCommands
                 string dodo = "";
                 if (!reader.HasRows)
                 {
-                    await ctx.Channel.SendMessageAsync("There is no active queue associated with this channel.").ConfigureAwait(false);
+                    var msg = await ctx.Channel.SendMessageAsync("There is no active queue associated with this channel.").ConfigureAwait(false);
                     reader.Close();
                     connection.Close();
+                    StartTimer(msg);
                     return;
                 }
                 while (reader.Read())
@@ -428,9 +471,10 @@ namespace ThePathBot.Commands.QueueCommands
                 reader = command.ExecuteReader();
                 if (!reader.HasRows)
                 {
-                    await ctx.Channel.SendMessageAsync("There is no one waiting in your queue currently.").ConfigureAwait(false);
+                    var msg = await ctx.Channel.SendMessageAsync("There is no one waiting in your queue currently.").ConfigureAwait(false);
                     reader.Close();
                     connection.Close();
+                    StartTimer(msg);
                     return;
                 }
                 List<ulong> discordIds = new List<ulong>();
@@ -442,7 +486,8 @@ namespace ThePathBot.Commands.QueueCommands
                 await MoveUsersToOnIsland(discordIds, ctx.Channel.Id);
                 foreach(var user in discordIds)
                 {
-                    var dmChannel = await ctx.Guild.GetMemberAsync(user).Result.CreateDmChannelAsync().ConfigureAwait(false);
+                    var dmUser = await ctx.Guild.GetMemberAsync(user);
+                    var dmChannel = await dmUser.CreateDmChannelAsync().ConfigureAwait(false);
                     var embed = new DiscordEmbedBuilder
                     {
                         Title = $"{ctx.Member.DisplayName}'s queue",
@@ -464,6 +509,10 @@ namespace ThePathBot.Commands.QueueCommands
             {
                 Console.Out.WriteLine(ex.Message);
                 Console.Out.Write(ex.StackTrace);
+            }
+            finally
+            {
+                await ctx.Channel.DeleteMessageAsync(ctx.Message).ConfigureAwait(false);
             }
         }
 
@@ -488,10 +537,11 @@ namespace ThePathBot.Commands.QueueCommands
                 var reader = command.ExecuteReader();
                 if (!reader.HasRows)
                 {
-                    await ctx.Channel.SendMessageAsync("Could not find a queue associated with this channel. " +
+                    var msg = await ctx.Channel.SendMessageAsync("Could not find a queue associated with this channel. " +
                         "Please contact a mod or admin to get the channel removed").ConfigureAwait(false);
                     reader.Close();
                     connection.Close();
+                    StartTimer(msg);
                     return;
                 }
                 while (reader.Read())
@@ -519,12 +569,14 @@ namespace ThePathBot.Commands.QueueCommands
         {
             if (ctx.Channel.Parent.Id != privateChannelGroup)
             {
-                await ctx.Channel.SendMessageAsync("You can only run this command from a private queue channel").ConfigureAwait(false);
+                var msg = await ctx.Channel.SendMessageAsync("You can only run this command from a private queue channel").ConfigureAwait(false);
+                StartTimer(msg);
                 return;
             }
             if (newcode.Length != 5)
             {
-                await ctx.Channel.SendMessageAsync("Dodo codes must be 5 characters long.").ConfigureAwait(false);
+                var msg = await ctx.Channel.SendMessageAsync("Dodo codes must be 5 characters long.").ConfigureAwait(false);
+                StartTimer(msg);
                 return;
             }
             try
@@ -538,14 +590,20 @@ namespace ThePathBot.Commands.QueueCommands
                 command.ExecuteNonQuery();
                 connection.Close();
 
-                await ctx.Channel.SendMessageAsync($"Dodo code is now updated to {newcode}").ConfigureAwait(false);
+                var msg = await ctx.Channel.SendMessageAsync($"Dodo code is now updated to {newcode}").ConfigureAwait(false);
+                StartTimer(msg);
             }
             catch (Exception ex)
             {
                 Console.Out.WriteLine(ex.Message);
                 Console.Out.WriteLine(ex.StackTrace);
-                await ctx.Channel.SendMessageAsync($"There was an error updating your dodo code, " +
+                var msg = await ctx.Channel.SendMessageAsync($"There was an error updating your dodo code, " +
                     $"if this persists please contact an admin or mod for help.").ConfigureAwait(false);
+                StartTimer(msg);
+            }
+            finally
+            {
+                await ctx.Channel.DeleteMessageAsync(ctx.Message).ConfigureAwait(false);
             }
         }
 
@@ -566,11 +624,21 @@ namespace ThePathBot.Commands.QueueCommands
 
         [Command("kick")]
         [Hidden]
-        public async Task KickUser(CommandContext ctx, string userPosition)
+        public async Task KickUser(CommandContext ctx, string grouposition, string userPosition)
         {
+            if (ctx.Channel.ParentId != privateChannelGroup)
+            {
+                await ctx.Channel.SendMessageAsync("You can only run this command from a private queue channel").ConfigureAwait(false);
+                return;
+            }
             if (!int.TryParse(userPosition, out int result))
             {
-                await ctx.Channel.SendMessageAsync("This is not a number").ConfigureAwait(false);
+                await ctx.Channel.SendMessageAsync("User position is not a number").ConfigureAwait(false);
+                return;
+            }
+            if (!int.TryParse(grouposition, out int groupPos))
+            {
+                await ctx.Channel.SendMessageAsync("Group position is not a number").ConfigureAwait(false);
                 return;
             }
 
@@ -578,12 +646,53 @@ namespace ThePathBot.Commands.QueueCommands
             {
                 MySqlConnection connection = await GetDBConnectionAsync();
                 string query = "SELECT DiscordID from pathQueuers WHERE queueChannelID = ?channelID " +
-                    "ORDER BY TimeJoined ASC";
+                    "AND GroupNumber = ?groupPosition AND PlaceInGroup = ?userPosition";
+                ulong discordID = 0;
+                MySqlCommand command = new MySqlCommand(query, connection);
+                command.Parameters.Add("?channelID", MySqlDbType.VarChar, 40).Value = ctx.Channel.Id;
+                command.Parameters.Add("?groupPosition", MySqlDbType.Int32).Value = groupPos;
+                command.Parameters.Add("?userPosition", MySqlDbType.Int32).Value = result;
+                await connection.OpenAsync();
+                MySqlDataReader reader = command.ExecuteReader();
+                if (!reader.HasRows)
+                {
+                    await ctx.Channel.SendMessageAsync("Could not find any user at this position.").ConfigureAwait(false);
+                    reader.Close();
+                    await connection.CloseAsync();
+                    return;
+                }
+                else
+                {
+                    while (reader.Read())
+                    {
+                        discordID = reader.GetUInt64("DiscordID");
+                    }
+                    reader.Close();
+                    await connection.CloseAsync();
+
+                    query = "DELETE from pathQueuers WHERE queueChannelID = ?channelID " +
+                         "AND GroupNumber = ?groupPosition AND PlaceInGroup = ?userPosition";
+                    command = new MySqlCommand(query, connection);
+                    command.Parameters.Add("?channelID", MySqlDbType.VarChar, 40).Value = ctx.Channel.Id;
+                    command.Parameters.Add("?groupPosition", MySqlDbType.Int32).Value = groupPos;
+                    command.Parameters.Add("?userPosition", MySqlDbType.Int32).Value = result;
+                    await connection.OpenAsync();
+                    command.ExecuteNonQuery();
+                    await connection.CloseAsync();
+                    DiscordMember removedUser = await ctx.Guild.GetMemberAsync(discordID).ConfigureAwait(false);
+                    await ctx.Channel.SendMessageAsync($"Removed {removedUser.DisplayName} from your queue").ConfigureAwait(false);
+                }
             }
             catch (Exception ex)
             {
+                var msg = await ctx.Channel.SendMessageAsync("An error has occured while running this command").ConfigureAwait(false);
                 Console.Out.WriteLine(ex.Message);
                 Console.Out.WriteLine(ex.StackTrace);
+                StartTimer(msg);
+            }
+            finally
+            {
+                await ctx.Channel.DeleteMessageAsync(ctx.Message).ConfigureAwait(false);
             }
         }
 
@@ -706,16 +815,60 @@ namespace ThePathBot.Commands.QueueCommands
             connection.Close();
         }
 
-        private async Task AddMemberToQueue(ulong discordID, ulong queueChannelID)
+        private async Task AddMemberToQueue(ulong discordID, ulong queueChannelID, string sessionCode)
         {
+            int maxVisitorsInGroup = await GetMaxVisitorsAtOnceFromCode(sessionCode);
+            (int, int) groupInfoNumebrs = await GetGroupNumber(queueChannelID, maxVisitorsInGroup);
             MySqlConnection connection = await GetDBConnectionAsync();
-            string query = "INSERT INTO pathQueuers (DiscordID, queueChannelID) VALUES (?discordID, ?queueChannelID)";
+            string query = "INSERT INTO pathQueuers (DiscordID, queueChannelID, GroupNumber, PlaceInGroup) " +
+                "VALUES (?discordID, ?queueChannelID, ?groupNumber, ?placeInGroup)";
             MySqlCommand command = new MySqlCommand(query, connection);
             command.Parameters.Add("?discordID", MySqlDbType.VarChar, 40).Value = discordID.ToString();
             command.Parameters.Add("?queueChannelID", MySqlDbType.VarChar, 40).Value = queueChannelID.ToString();
+            command.Parameters.Add("?groupNumber", MySqlDbType.Int32).Value = groupInfoNumebrs.Item1;
+            command.Parameters.Add("?placeInGroup", MySqlDbType.Int32).Value = groupInfoNumebrs.Item2;
             connection.Open();
             command.ExecuteNonQuery();
             connection.Close();
+        }
+
+        private async Task<(int, int)> GetGroupNumber(ulong queueChannelID, int maxInGroup)
+        {
+            int groupNumber = 1;
+            int positionInGroup = 1;
+            MySqlConnection connection = await GetDBConnectionAsync();
+            string query = "SELECT * FROM pathQueuers WHERE queueChannelID = ?queueChannelID AND visited = 0 " +
+                "ORDER BY GroupNumber DESC, PlaceInGroup DESC, TimeJoined DESC LIMIT 1";
+            MySqlCommand command = new MySqlCommand(query, connection);
+            command.Parameters.Add("?queueChannelID", MySqlDbType.VarChar, 40).Value = queueChannelID;
+            await connection.OpenAsync();
+            MySqlDataReader reader = command.ExecuteReader();
+
+            if (reader.HasRows)
+            {
+                while (reader.Read())
+                {
+                    groupNumber = reader.GetInt32("GroupNumber");
+                    positionInGroup = reader.GetInt32("PlaceInGroup");
+                }
+            }
+            else
+            {
+                return (groupNumber, positionInGroup);
+            }
+            reader.Close();
+            await connection.CloseAsync();
+
+            if (positionInGroup >= maxInGroup)
+            {
+                groupNumber++;
+                positionInGroup = 1;
+            }
+            else
+            {
+                positionInGroup++;
+            }
+            return (groupNumber, positionInGroup);
         }
 
         private async Task<MySqlConnection> GetDBConnectionAsync()

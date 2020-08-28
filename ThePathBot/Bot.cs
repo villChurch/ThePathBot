@@ -187,9 +187,18 @@ namespace ThePathBot
 
         private async Task Client_MessageCreated(MessageCreateEventArgs e)
         {
+            //if (e.Channel.IsPrivate && !e.Author.IsBot)
+            //{
+            //    await e.Channel.SendMessageAsync("Hello").ConfigureAwait(false);
+            //}
             if (e.Channel.Id == daisymaeChannelId || e.Channel.Id == nookShopChannelId)
             {
                 if (e.Author.IsBot)
+                {
+                    return;
+                }
+
+                if (e.Message.Content.StartsWith("?join"))
                 {
                     return;
                 }
@@ -234,11 +243,12 @@ namespace ThePathBot
                     }
                     else
                     {
+                        DiscordMember member = await e.Guild.GetMemberAsync(e.Message.Author.Id);
                         DiscordEmbedBuilder embed = new DiscordEmbedBuilder
                         {
                             Title = "Wrong number!",
                             Color = DiscordColor.Red,
-                            Description = e.Guild.GetMemberAsync(e.Message.Author.Id).Result.DisplayName + " has enetered the wrong number! Start again from 1"
+                            Description = $"{member.DisplayName} has enetered the wrong number! Start again from 1"
                         };
                         countNumber = 0;
                         lastCountId = 0;
