@@ -3,12 +3,7 @@ namespace ThePathBot.Utilities
 {
     public class DBConnection
     {
-        private string databaseName = string.Empty;
-        public string DatabaseName
-        {
-            get { return databaseName; }
-            set { databaseName = value; }
-        }
+        public string DatabaseName { get; set; } = string.Empty;
 
         public string databaseUser { get; set; }
         public string Password { get; set; }
@@ -22,9 +17,6 @@ namespace ThePathBot.Utilities
         }
 
         public string databasePort { get; set; }
-        public string connectionString
-        {
-            get { return $"Server=williamspires.co.uk; Port={databasePort}; database={databaseName}; UID={databaseUser}; password={Password}"; }
-        }
+        public string connectionString => $"Server=192.168.1.125; Port={databasePort}; database={DatabaseName}; UID={databaseUser}; password={Password}";
     }
 }

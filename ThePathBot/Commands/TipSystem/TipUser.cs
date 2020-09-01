@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using DSharpPlus.CommandsNext;
@@ -14,7 +15,8 @@ namespace ThePathBot.Commands.TipSystem
 {
     public class TipUser : BaseCommandModule
     {
-        private string configFilePath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+        private readonly string configFilePath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+        private readonly ulong visitingMerchantRoleId = 744722781106733077;
 
         [Command("tip")]
         [Description("tip a user for a positive transaction")]
@@ -100,7 +102,10 @@ namespace ThePathBot.Commands.TipSystem
                             Text = $"{recipient.DisplayName} now has {newTotal} tips."
                         },
                         Color = DiscordColor.Blurple,
-                        ThumbnailUrl = recipient.AvatarUrl
+                        Thumbnail = new DiscordEmbedBuilder.EmbedThumbnail
+                        {
+                            Url = recipient.AvatarUrl
+                        }
                     };
                     if (ctx.Guild.Channels.ContainsKey(744820641085259856))
                     {
@@ -126,7 +131,8 @@ namespace ThePathBot.Commands.TipSystem
 
         [Command("givetips")]
         [Hidden]
-        [RequireRoles(RoleCheckMode.Any, "Owners", "Dev", "Tom Nook Incarnate")]
+        //[RequireRoles(RoleCheckMode.Any, "Owners", "Dev", "Tom Nook Incarnate")]
+        [RequireUserPermissions(DSharpPlus.Permissions.BanMembers)]
         public async Task GiveTips(CommandContext ctx, params string[] user)
         {
             if (ctx.Guild.Id == 694013861560320081)
@@ -147,7 +153,7 @@ namespace ThePathBot.Commands.TipSystem
             }
             List<string> messages = new List<string>(user);
 
-            foreach(DiscordUser mention in mentionedUser)
+            foreach (DiscordUser mention in mentionedUser)
             {
                 messages.Remove(mention.Mention);
                 messages.Remove(mention.Mention.Replace("<@!", "<@"));
@@ -184,6 +190,8 @@ namespace ThePathBot.Commands.TipSystem
             int currentTotal = GetTotal(userToTip.Id, connection) - 1;
             DiscordMember recipient = await ctx.Guild.GetMemberAsync(userToTip.Id);
             UpdateTotal(userToTip.Id, currentTotal + numberToGive, connection);
+
+            UpdateRoles(currentTotal + numberToGive, userToTip.Id, ctx);
 
             await ctx.Channel.SendMessageAsync($"Succesfully given " +
                 $"{recipient.DisplayName} {numberToGive} tips.").ConfigureAwait(false);
@@ -242,7 +250,10 @@ namespace ThePathBot.Commands.TipSystem
                 DiscordEmbedBuilder tipEmbed = new DiscordEmbedBuilder
                 {
                     Description = $"{ctx.Member.DisplayName} has {tipTotal} tips.",
-                    ThumbnailUrl = ctx.Member.AvatarUrl,
+                    Thumbnail = new DiscordEmbedBuilder.EmbedThumbnail
+                    {
+                        Url = ctx.Member.AvatarUrl
+                    },
                     Color = DiscordColor.Blurple
                 };
 
@@ -331,7 +342,7 @@ namespace ThePathBot.Commands.TipSystem
             }
             catch (Exception ex)
             {
-                throw;
+                throw ex;
             }
             finally
             {
@@ -341,37 +352,104 @@ namespace ThePathBot.Commands.TipSystem
 
         private async void UpdateRoles(int newTotal, ulong user, CommandContext ctx)
         {
-            DiscordMember recipient = await ctx.Guild.GetMemberAsync(user);
-            switch (newTotal)
+            if (ctx.Guild.Id != 744699540212416592)
             {
+                return;
+            }
+            await SendCongratulationMessage(newTotal, user, ctx);
+            DiscordMember recipient = await ctx.Guild.GetMemberAsync(user);
+            IEnumerable<DiscordRole> userRoles = recipient.Roles;
+
+            if (newTotal >= 25)
+            {
+                var TipRole = ctx.Guild.GetRole(749452392201715723);
+                if (!userRoles.Contains(TipRole))
+                {
+                    await recipient.GrantRoleAsync(TipRole, "Reached 25 tips or more").ConfigureAwait(false);
+                }
+            }
+            if (newTotal >= 75)
+            {
+                var TipRole = ctx.Guild.GetRole(749452452155359243);
+                if (!userRoles.Contains(TipRole))
+                {
+                    await recipient.GrantRoleAsync(TipRole, "Reached 75 tips or more").ConfigureAwait(false);
+                }
+            }
+            if (newTotal >= 150)
+            {
+                var TipRole = ctx.Guild.GetRole(749452611593437195);
+                if (!userRoles.Contains(TipRole))
+                {
+                    await recipient.GrantRoleAsync(TipRole, "Reached 150 tips or more").ConfigureAwait(false);
+                }
+                TipRole = ctx.Guild.GetRole(visitingMerchantRoleId);
+                if (!userRoles.Contains(TipRole))
+                {
+                    await recipient.GrantRoleAsync(TipRole, "Giving Visiting Merchant as user has 150 or above tips").ConfigureAwait(false);
+                }
+            }
+            if (newTotal >= 300)
+            {
+                var TipRole = ctx.Guild.GetRole(749452682267459614);
+                if (!userRoles.Contains(TipRole))
+                {
+                    await recipient.GrantRoleAsync(TipRole, "Reached 300 tips or more").ConfigureAwait(false);
+                }
+            }
+            if (newTotal >= 750)
+            {
+                var TipRole = ctx.Guild.GetRole(749452738802483290);
+                if (!userRoles.Contains(TipRole))
+                {
+                    await recipient.GrantRoleAsync(TipRole, "Reached 750 tips or more").ConfigureAwait(false);
+                }
+            }
+            if (newTotal >= 1500)
+            {
+                var TipRole = ctx.Guild.GetRole(749452794691452998);
+                if (!userRoles.Contains(TipRole))
+                {
+                    await recipient.GrantRoleAsync(TipRole, "Reached 1500 tips or more").ConfigureAwait(false);
+                }
+            }
+        }
+
+        private async Task SendCongratulationMessage(int totalTips, ulong userId, CommandContext ctx)
+        {
+            DiscordMember recipient = await ctx.Guild.GetMemberAsync(userId);
+            DiscordEmbedBuilder embed = new DiscordEmbedBuilder
+            {
+                Description = $":tada: {recipient.DisplayName} has reached {totalTips} tips!",
+                Color = DiscordColor.Blurple
+            };
+            switch (totalTips)
+            {
+                case 25:
+                    await ctx.Guild.GetChannel(744731248416784545).SendMessageAsync(embed: embed).ConfigureAwait(false);
+                    break;
                 case 50:
-                    DiscordEmbedBuilder embed = new DiscordEmbedBuilder
-                    {
-                        Description = $":tada: {recipient.DisplayName} has reached 50 tips!",
-                        Color = DiscordColor.Blurple
-                    };
-                    if (ctx.Guild.Roles.ContainsKey(744722781106733077))
-                    {
-                        DiscordRole role = ctx.Guild.GetRole(744722781106733077);
-                        await recipient.GrantRoleAsync(role, "Made 50 reviews").ConfigureAwait(false);
-                        await ctx.Guild.GetChannel(744731248416784545).SendMessageAsync(embed: embed).ConfigureAwait(false);
-
-                    }
-                    else
-                    {
-                        await ctx.Channel.SendMessageAsync(embed: embed).ConfigureAwait(false);
-                    }
+                    await ctx.Guild.GetChannel(744731248416784545).SendMessageAsync(embed: embed).ConfigureAwait(false);
                     break;
-
-                case 100:
-                    //await recipient.GrantRoleAsync().ConfigureAwait(false); give 100 tip role
+                case 75:
+                    await ctx.Guild.GetChannel(744731248416784545).SendMessageAsync(embed: embed).ConfigureAwait(false);
                     break;
-
+                case 150:
+                    await ctx.Guild.GetChannel(744731248416784545).SendMessageAsync(embed: embed).ConfigureAwait(false);
+                    break;
+                case 300:
+                    await ctx.Guild.GetChannel(744731248416784545).SendMessageAsync(embed: embed).ConfigureAwait(false);
+                    break;
+                case 750:
+                    await ctx.Guild.GetChannel(744731248416784545).SendMessageAsync(embed: embed).ConfigureAwait(false);
+                    break;
+                case 1500:
+                    await ctx.Guild.GetChannel(744731248416784545).SendMessageAsync(embed: embed).ConfigureAwait(false);
+                    break;
                 default:
                     // do nothing
                     break;
             }
-
         }
     }
 }

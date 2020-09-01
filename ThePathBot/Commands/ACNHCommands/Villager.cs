@@ -59,7 +59,7 @@ namespace ThePathBot.Commands.ACNHCommands
             {
                 Title = responseVillager.Name,
                 Color = DiscordColor.Blurple,
-                ImageUrl = "http://williamspires.co.uk:9876/villagers/" + responseVillager.Filename + ".png"
+                ImageUrl = "http://williamspires.com/villagers/" + responseVillager.Filename + ".png"
             };
             villagerEmbed.AddField("Species", responseVillager.Species, true);
             villagerEmbed.AddField("Gender", responseVillager.Gender, true);

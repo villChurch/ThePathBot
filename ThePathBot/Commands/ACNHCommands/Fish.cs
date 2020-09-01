@@ -60,12 +60,12 @@ namespace ThePathBot.Commands.ACNHCommands
                 }
             }
 
-            Console.Out.WriteLine("http://williamspires.co.uk:9876/Fish/" + responseFish.CritterpediaFilename + ".png");
+            Console.Out.WriteLine("http://williamspires.com/Fish/" + responseFish.CritterpediaFilename + ".png");
             var fishEmbed = new DiscordEmbedBuilder
             {
                 Title = responseFish.Name,
                 Color = DiscordColor.Blurple,
-                ImageUrl = "http://williamspires.co.uk:9876/Fish/" + responseFish.CritterpediaFilename + ".png"
+                ImageUrl = "http://williamspires.com/Fish/" + responseFish.CritterpediaFilename + ".png"
             };
             fishEmbed.AddField("Where To Find", responseFish.WhereOrHow, true);
             fishEmbed.AddField("Shadow Size", responseFish.Shadow, true);

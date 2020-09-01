@@ -26,7 +26,8 @@ namespace ThePathBot.Commands.QueueCommands
         {
             Title = "Your Queue has been created",
             Description = "To see whos in the queue run ```?showqueue ``` To send the next group of people run ```?sendcode```" +
-                "To show who is currently on island run ```?onisland``` To end your session run ```?endqueue```",
+                "To change your dodocode run ```?updatedodo``` To kick someone from your queue run " +
+            "```?kick groupNumber positionIngroup``` To end your session run ```?endqueue```",
             Color = DiscordColor.Blurple
         };
 
@@ -152,7 +153,10 @@ namespace ThePathBot.Commands.QueueCommands
                 var embed = new DiscordEmbedBuilder
                 {
                     Title = "Turnip Session",
-                    ThumbnailUrl = attachment
+                    Thumbnail = new DiscordEmbedBuilder.EmbedThumbnail
+                    {
+                        Url = attachment
+                    }
                 };
 
                 StringBuilder sb = new StringBuilder();

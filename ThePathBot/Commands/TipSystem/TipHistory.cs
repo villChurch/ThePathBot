@@ -84,7 +84,10 @@ namespace ThePathBot.Commands.TipSystem
                     {
                         Title = $"Reivew from {userName}",
                         Description = $"{item.Message}",
-                        ThumbnailUrl = ctx.Guild.GetMemberAsync((ulong)item.SenderId).Result.GetAvatarUrl(DSharpPlus.ImageFormat.Png),
+                        Thumbnail = new DiscordEmbedBuilder.EmbedThumbnail
+                        {
+                            Url = ctx.Guild.GetMemberAsync((ulong)item.SenderId).Result.GetAvatarUrl(DSharpPlus.ImageFormat.Png)
+                        },
                         Footer = new DiscordEmbedBuilder.EmbedFooter
                         {
                             Text = $"Tip {counter}/{tips.Count} - Recived at {item.Timestamp}"

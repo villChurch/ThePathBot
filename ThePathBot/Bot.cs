@@ -19,6 +19,7 @@ using ThePathBot.Commands.TipSystem;
 using ThePathBot.Commands.QueueCommands;
 using ThePathBot.Utilities;
 using MySql.Data.MySqlClient;
+using Microsoft.Extensions.Logging;
 
 namespace ThePathBot
 {
@@ -126,8 +127,7 @@ namespace ThePathBot
                 Token = configJson.Token,
                 TokenType = TokenType.Bot,
                 AutoReconnect = true,
-                LogLevel = LogLevel.Debug,
-                UseInternalLogHandler = true,
+                MinimumLogLevel = Microsoft.Extensions.Logging.LogLevel.Debug
             };
 
             // var shardClient = new DiscordShardedClient(config);
@@ -137,6 +137,7 @@ namespace ThePathBot
             Client.GuildAvailable += this.Client_GuildAvailable;
             Client.ClientErrored += this.Client_ClientError;
             Client.MessageCreated += this.Client_MessageCreated;
+            //Client.Logger. += this.DebugLogger_LogMessageReceived;
 
             // let's enable interactivity, and set default options
 #pragma warning disable IDE0058 // Expression value is never used
@@ -262,34 +263,35 @@ namespace ThePathBot
         private Task OnClientReady(ReadyEventArgs e)
         {
             // let's log the fact that this event occured
-            e.Client.DebugLogger.LogMessage(LogLevel.Info, "The Path", "Client is ready to process events.", DateTime.Now);
+            e.Client.Logger.Log(LogLevel.Information, $"The Path - Client is ready to process events.");
             return Task.CompletedTask;
         }
 
         private async Task Client_GuildAvailable(GuildCreateEventArgs e)
         {
-            e.Client.DebugLogger.LogMessage(LogLevel.Info, "The Path", $"Guild available: {e.Guild.Name}", DateTime.Now);
+            e.Client.Logger.Log(LogLevel.Information, $"The Path - Guild available: {e.Guild.Name}");
             await UpdatePresenceAsync(e, e.Guild.MemberCount);
             //return Task.CompletedTask;
         }
 
         private Task Client_ClientError(ClientErrorEventArgs e)
         {
-            e.Client.DebugLogger.LogMessage(LogLevel.Error, "The Path", $"Exception occured: {e.Exception.GetType()}: {e.Exception.Message}", DateTime.Now);
+            e.Client.Logger.Log(LogLevel.Error, $"The Path - Exception occured: {e.Exception.GetType()}: {e.Exception.Message}");
 
             return Task.CompletedTask;
         }
 
         private Task Commands_CommandExecuted(CommandExecutionEventArgs e)
         {
-            e.Context.Client.DebugLogger.LogMessage(LogLevel.Info, "The Path", $"{e.Context.User.Username} successfully executed '{e.Command.QualifiedName}'", DateTime.Now);
+            e.Context.Client.Logger.Log(LogLevel.Information,
+                $"The Path - {e.Context.User.Username} successfully executed '{e.Command.QualifiedName}'");
 
             return Task.CompletedTask;
         }
 
         private async Task Commands_CommandErrored(CommandErrorEventArgs e)
         {
-            e.Context.Client.DebugLogger.LogMessage(LogLevel.Error, "The Path", $"{e.Context.User.Username} tried executing '{e.Command?.QualifiedName ?? "<unknown command>"}' but it errored: {e.Exception.GetType()}: {e.Exception.Message ?? "<no message>"}", DateTime.Now);
+            e.Context.Client.Logger.Log(LogLevel.Error, $"The Path - {e.Context.User.Username} tried executing '{e.Command?.QualifiedName ?? "<unknown command>"}' but it errored: {e.Exception.GetType()}: {e.Exception.Message ?? "<no message>"}");
 
             if (e.Exception is ChecksFailedException ex)
             {
