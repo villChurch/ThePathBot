@@ -20,6 +20,9 @@ using ThePathBot.Commands.QueueCommands;
 using ThePathBot.Utilities;
 using MySql.Data.MySqlClient;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.DependencyInjection;
+using ThePathBot.Listeners;
+using System.Reflection;
 
 namespace ThePathBot
 {
@@ -36,6 +39,8 @@ namespace ThePathBot
 
         private static readonly DateTime UnixEpoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         private int totalMembers = 0;
+
+        private IServiceProvider Services { get; set; }
 
         public Bot()
         {
@@ -127,7 +132,7 @@ namespace ThePathBot
                 Token = configJson.Token,
                 TokenType = TokenType.Bot,
                 AutoReconnect = true,
-                MinimumLogLevel = Microsoft.Extensions.Logging.LogLevel.Debug
+                MinimumLogLevel = LogLevel.Debug
             };
 
             // var shardClient = new DiscordShardedClient(config);
@@ -137,7 +142,14 @@ namespace ThePathBot
             Client.GuildAvailable += this.Client_GuildAvailable;
             Client.ClientErrored += this.Client_ClientError;
             Client.MessageCreated += this.Client_MessageCreated;
+            Client.MessageReactionAdded += this.Client_MessageReactionAdded;
             //Client.Logger. += this.DebugLogger_LogMessageReceived;
+
+#pragma warning disable CS1702 // Assuming assembly reference matches identity
+            Services = new ServiceCollection()
+                .AddSingleton<ReactionService>()
+                .BuildServiceProvider(true);
+#pragma warning restore CS1702 // Assuming assembly reference matches identity
 
             // let's enable interactivity, and set default options
 #pragma warning disable IDE0058 // Expression value is never used
@@ -158,6 +170,7 @@ namespace ThePathBot
                 EnableDms = false,
                 DmHelp = false,
                 IgnoreExtraArguments = true,
+                Services = Services
             };
 
             Commands = Client.UseCommandsNext(commandsConfig);
@@ -165,25 +178,32 @@ namespace ThePathBot
             Commands.CommandExecuted += this.Commands_CommandExecuted;
             Commands.CommandErrored += this.Commands_CommandErrored;
 
-            Commands.RegisterCommands<MainPathCommands>();
-            Commands.RegisterCommands<UtilityCommands>();
-            Commands.RegisterCommands<PathAdminCommands>();
-            Commands.RegisterCommands<PathTagging>();
-            Commands.RegisterCommands<Net>();
-            Commands.RegisterCommands<PascalWisdom>();
-            Commands.RegisterCommands<UrbanDictionarySearch>();
-            Commands.RegisterCommands<Axe>();
-            Commands.RegisterCommands<Villager>();
-            Commands.RegisterCommands<Fish>();
-            Commands.RegisterCommands<Emoji>();
-            Commands.RegisterCommands<TipUser>();
-            Commands.RegisterCommands<Queue>();
-            Commands.RegisterCommands<TipHistory>();
+            //Commands.RegisterCommands<MainPathCommands>();
+            //Commands.RegisterCommands<UtilityCommands>();
+            //Commands.RegisterCommands<PathAdminCommands>();
+            //Commands.RegisterCommands<PathTagging>();
+            //Commands.RegisterCommands<Net>();
+            //Commands.RegisterCommands<PascalWisdom>();
+            //Commands.RegisterCommands<UrbanDictionarySearch>();
+            //Commands.RegisterCommands<Axe>();
+            //Commands.RegisterCommands<Villager>();
+            //Commands.RegisterCommands<Fish>();
+            //Commands.RegisterCommands<Emoji>();
+            //Commands.RegisterCommands<TipUser>();
+            //Commands.RegisterCommands<Queue>();
+            //Commands.RegisterCommands<TipHistory>();
             // Commands.RegisterCommands<FunCommands>();
+
+            Commands.RegisterCommands(Assembly.GetExecutingAssembly());
 
             await Client.ConnectAsync();
 
             await Task.Delay(-1);
+        }
+
+        private async Task Client_MessageReactionAdded(MessageReactionAddEventArgs e)
+        {
+            await ReactionService.CheckReactionAddedIsFridgeReaction(e);
         }
 
         private async Task Client_MessageCreated(MessageCreateEventArgs e)

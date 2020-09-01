@@ -182,6 +182,8 @@
     <Compile Include="Models\Tip.cs" />
     <Compile Include="Utilities\AlphaNumericStringGenerator.cs" />
     <Compile Include="Models\QueueMember.cs" />
+    <Compile Include="Services\ReactionService.cs" />
+    <Compile Include="Commands\Admin\FridgeBoardControl.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
@@ -201,6 +203,7 @@
     <Folder Include="Commands\ModMail\" />
     <Folder Include="Commands\TipSystem\" />
     <Folder Include="Commands\QueueCommands\" />
+    <Folder Include="Services\" />
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
 </Project>
