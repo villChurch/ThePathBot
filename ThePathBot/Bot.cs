@@ -10,19 +10,13 @@ using Newtonsoft.Json;
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
-using ThePathBot.Commands.PathCommands;
-using ThePathBot.Commands;
-using ThePathBot.Commands.UrbanDictionary;
-using ThePathBot.Commands.ACNHCommands;
-using ThePathBot.Commands.Admin;
-using ThePathBot.Commands.TipSystem;
-using ThePathBot.Commands.QueueCommands;
 using ThePathBot.Utilities;
 using MySql.Data.MySqlClient;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection;
 using ThePathBot.Listeners;
 using System.Reflection;
+using ThePathBot.Services;
 
 namespace ThePathBot
 {
@@ -32,12 +26,12 @@ namespace ThePathBot
         private CommandsNextExtension Commands { get; set; }
         public InteractivityConfiguration Interactivity { get; private set; }
         private int countNumber = GetCountNumberOnRestart();
-        private ulong lastCountId { get; set; }
+        private ulong LastCountId { get; set; }
         private static readonly string configFilePath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
         private readonly ulong daisymaeChannelId = 744733207148232845;
         private readonly ulong nookShopChannelId =  744733259748999270; // test channel 746852898465644544;
 
-        private static readonly DateTime UnixEpoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        //private static readonly DateTime UnixEpoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         private int totalMembers = 0;
 
         private IServiceProvider Services { get; set; }
@@ -148,6 +142,7 @@ namespace ThePathBot
 #pragma warning disable CS1702 // Assuming assembly reference matches identity
             Services = new ServiceCollection()
                 .AddSingleton<ReactionService>()
+                .AddScoped<TicketService>()
                 .BuildServiceProvider(true);
 #pragma warning restore CS1702 // Assuming assembly reference matches identity
 
@@ -177,22 +172,6 @@ namespace ThePathBot
 
             Commands.CommandExecuted += this.Commands_CommandExecuted;
             Commands.CommandErrored += this.Commands_CommandErrored;
-
-            //Commands.RegisterCommands<MainPathCommands>();
-            //Commands.RegisterCommands<UtilityCommands>();
-            //Commands.RegisterCommands<PathAdminCommands>();
-            //Commands.RegisterCommands<PathTagging>();
-            //Commands.RegisterCommands<Net>();
-            //Commands.RegisterCommands<PascalWisdom>();
-            //Commands.RegisterCommands<UrbanDictionarySearch>();
-            //Commands.RegisterCommands<Axe>();
-            //Commands.RegisterCommands<Villager>();
-            //Commands.RegisterCommands<Fish>();
-            //Commands.RegisterCommands<Emoji>();
-            //Commands.RegisterCommands<TipUser>();
-            //Commands.RegisterCommands<Queue>();
-            //Commands.RegisterCommands<TipHistory>();
-            // Commands.RegisterCommands<FunCommands>();
 
             Commands.RegisterCommands(Assembly.GetExecutingAssembly());
 
@@ -244,13 +223,13 @@ namespace ThePathBot
                 if (isANumber)
                 {
                     var emoji = DiscordEmoji.FromName(e.Client, ":thumbsup:");
-                    if (number == (countNumber + 1) && lastCountId != e.Message.Author.Id)
+                    if (number == (countNumber + 1) && LastCountId != e.Message.Author.Id)
                     {
                         await e.Message.CreateReactionAsync(emoji).ConfigureAwait(false);
                         countNumber++;
-                        lastCountId = e.Message.Author.Id;
+                        LastCountId = e.Message.Author.Id;
                     }
-                    else if(e.Message.Author.Id == lastCountId)
+                    else if(e.Message.Author.Id == LastCountId)
                     {
                         DiscordEmbedBuilder embed = new DiscordEmbedBuilder
                         {
@@ -259,7 +238,7 @@ namespace ThePathBot
                             Description = $"You can't enter more than one number in a row please wait your turn {e.Guild.GetMemberAsync(e.Message.Author.Id).Result.DisplayName}. Start again from 1"
                         };
                         countNumber = 0;
-                        lastCountId = 0;
+                        LastCountId = 0;
                         await e.Channel.SendMessageAsync(embed: embed).ConfigureAwait(false);
                     }
                     else
@@ -272,7 +251,7 @@ namespace ThePathBot
                             Description = $"{member.DisplayName} has enetered the wrong number! Start again from 1"
                         };
                         countNumber = 0;
-                        lastCountId = 0;
+                        LastCountId = 0;
                         await e.Channel.SendMessageAsync(embed: embed).ConfigureAwait(false);
                     }
                     UpdateCountNumberInDb(countNumber);

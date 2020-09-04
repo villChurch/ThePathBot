@@ -184,6 +184,8 @@
     <Compile Include="Models\QueueMember.cs" />
     <Compile Include="Services\ReactionService.cs" />
     <Compile Include="Commands\Admin\FridgeBoardControl.cs" />
+    <Compile Include="Commands\SupportCommands\TicketSystem.cs" />
+    <Compile Include="Services\TicketService.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
@@ -204,6 +206,7 @@
     <Folder Include="Commands\TipSystem\" />
     <Folder Include="Commands\QueueCommands\" />
     <Folder Include="Services\" />
+    <Folder Include="Commands\SupportCommands\" />
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
 </Project>

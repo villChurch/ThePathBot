@@ -131,7 +131,6 @@ namespace ThePathBot.Commands.TipSystem
 
         [Command("givetips")]
         [Hidden]
-        //[RequireRoles(RoleCheckMode.Any, "Owners", "Dev", "Tom Nook Incarnate")]
         [RequireUserPermissions(DSharpPlus.Permissions.BanMembers)]
         public async Task GiveTips(CommandContext ctx, params string[] user)
         {

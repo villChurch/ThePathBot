@@ -20,6 +20,7 @@ namespace ThePathBot.Commands.QueueCommands
     {
         private readonly ulong privateChannelGroup = 745024494464270448; //test server 744273831602028645;
         private readonly ulong turnipPostChannel = 744733259748999270; //test server 744644693479915591;
+        private readonly ulong daisyMaeChannel = 744733207148232845;
         private readonly string configFilePath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
         private Timer msgDestructTimer;
         private readonly DiscordEmbedBuilder sessionEmbed = new DiscordEmbedBuilder
@@ -75,13 +76,26 @@ namespace ThePathBot.Commands.QueueCommands
             var interactivity = ctx.Client.GetInteractivity();
             DiscordEmoji yes = DiscordEmoji.FromName(ctx.Client, ":white_check_mark:");
             DiscordEmoji no = DiscordEmoji.FromName(ctx.Client, ":x:");
+            // nooks :70xTimmy:
+            // Daisy :70zdaisymae:
+            DiscordEmoji daisy = DiscordEmoji.FromName(ctx.Client, ":70zdaisymae:");
+            DiscordEmoji nooks = DiscordEmoji.FromName(ctx.Client, ":70xTimmy:");
             string turnipPrice = "0";
             string attachment = "";
             string maxGroupSize = "0";
             string dodoCode = "";
             string message = "Welcome";
+            bool isDaisy = false;
             while (!ready)
             {
+                var daisyNooksMessage = await newChannel.SendMessageAsync($"React {daisy} for daisy session or {nooks} for turnip session").ConfigureAwait(false);
+                await daisyNooksMessage.CreateReactionAsync(daisy).ConfigureAwait(false);
+                await daisyNooksMessage.CreateReactionAsync(nooks).ConfigureAwait(false);
+
+                var daisyOrNooks = await interactivity.WaitForReactionAsync(react => (react.Emoji == daisy ||
+                react.Emoji == nooks) && react.User == ctx.User, TimeSpan.FromMinutes(2)).ConfigureAwait(false);
+                isDaisy = daisyOrNooks.Result.Emoji == daisy;
+
                 bool responseCorrect = true;
                 await newChannel.SendMessageAsync("Enter your Dodo Code").ConfigureAwait(false);
 
@@ -99,7 +113,7 @@ namespace ThePathBot.Commands.QueueCommands
                     responseCorrect = false;
                 }
 
-                await newChannel.SendMessageAsync("Enter your turnip price").ConfigureAwait(false);
+                await newChannel.SendMessageAsync("Enter your price").ConfigureAwait(false);
 
                 msg = await interactivity.WaitForMessageAsync(x => x.Channel == newChannel && x.Author == ctx.Member).ConfigureAwait(false);
 
@@ -112,7 +126,7 @@ namespace ThePathBot.Commands.QueueCommands
                 }
                 if (!int.TryParse(turnipPrice, out int price))
                 {
-                    await newChannel.SendMessageAsync("This is not a valid turnip price").ConfigureAwait(false);
+                    await newChannel.SendMessageAsync("This is not a valid price").ConfigureAwait(false);
                     responseCorrect = false;
                 }
 
@@ -161,7 +175,14 @@ namespace ThePathBot.Commands.QueueCommands
 
                 StringBuilder sb = new StringBuilder();
                 sb.AppendLine($"Dodo Code: {dodoCode}");
-                sb.AppendLine($"Turnip Price: {turnipPrice}");
+                if (isDaisy)
+                {
+                    sb.AppendLine($"Daisy Price: {turnipPrice}");
+                }
+                else
+                {
+                    sb.AppendLine($"Turnip Price: {turnipPrice}");
+                }
                 sb.AppendLine($"Session Message: {message}");
                 sb.AppendLine($"Group Size: {maxGroupSize}");
                 sb.AppendLine($"If this information is correct press the :white_check_mark: otherwise press :x: to start again.");
@@ -190,7 +211,7 @@ namespace ThePathBot.Commands.QueueCommands
             }
             var dodoMsg = await newChannel.SendMessageAsync(embed: sessionEmbed).ConfigureAwait(false);
 
-            CreateQueueEmbed(turnipPrice, ctx, newChannel, attachment, maxGroupSize, dodoCode, message);
+            CreateQueueEmbed(turnipPrice, ctx, newChannel, attachment, maxGroupSize, dodoCode, message, isDaisy);
         }
 
         [Command("showqueue")]
@@ -325,6 +346,16 @@ namespace ThePathBot.Commands.QueueCommands
                 StartTimer(joinMessage);
                 return;
             }
+            bool banned = await IsUserBannedFromQueue(code, ctx.Member.Id);
+
+            if (banned)
+            {
+                joinMessage = await ctx.Channel.SendMessageAsync($"{ctx.Member.Mention} You have been banned from " +
+                    $"this queue and therefore cannot join it.").ConfigureAwait(false);
+                StartTimer(joinMessage);
+                return;
+            }
+
             try
             {
                 MySqlConnection connection = await GetDBConnectionAsync();
@@ -534,7 +565,8 @@ namespace ThePathBot.Commands.QueueCommands
                 command.ExecuteNonQuery();
                 connection.Close();
                 ulong messageId = 0;
-                query = "Select queueMessageID from pathQueues WHERE privateChannelID = ?channelID";
+                bool isDaisy = false;
+                query = "Select queueMessageID, daisy from pathQueues WHERE privateChannelID = ?channelID";
                 command = new MySqlCommand(query, connection);
                 command.Parameters.Add("?channelID", MySqlDbType.VarChar, 40).Value = ctx.Channel.Id;
                 connection.Open();
@@ -551,13 +583,23 @@ namespace ThePathBot.Commands.QueueCommands
                 while (reader.Read())
                 {
                     messageId = reader.GetUInt64("queueMessageID");
+                    isDaisy = reader.GetBoolean("daisy");
                 }
-
-                var message = await ctx.Guild.GetChannel(turnipPostChannel).GetMessageAsync(messageId);
+                ulong postChannel = isDaisy ? daisyMaeChannel : turnipPostChannel;
+                var message = await ctx.Guild.GetChannel(postChannel).GetMessageAsync(messageId);
 
                 if (message == null) return;
 
-                await ctx.Guild.GetChannel(turnipPostChannel).DeleteMessageAsync(message);
+                var embedContent = message.Embeds[0];
+                var newEmbed = new DiscordEmbedBuilder
+                {
+                    Title = embedContent.Title,
+                    Description = "Closed",
+                    ImageUrl = embedContent.Image.Url.ToString()
+                };
+                DiscordEmbed discordEmbed = newEmbed;
+                await message.ModifyAsync(embed: discordEmbed).ConfigureAwait(false);
+                //await ctx.Guild.GetChannel(turnipPostChannel).DeleteMessageAsync(message);
                 await ctx.Channel.DeleteAsync();
             }
             catch (Exception ex)
@@ -700,6 +742,126 @@ namespace ThePathBot.Commands.QueueCommands
             }
         }
 
+        [Command("ban")]
+        [Hidden]
+        public async Task BanUserFromQueue(CommandContext ctx, int groupPosition, int userPosition)
+        {
+            if (ctx.Channel.ParentId != privateChannelGroup)
+            {
+                var msg = await ctx.Channel.SendMessageAsync($"{ctx.Member.Mention} You can only run this command from a private queue channel").ConfigureAwait(false);
+                StartTimer(msg);
+                return;
+            }
+
+            try
+            {
+                MySqlConnection connection = await GetDBConnectionAsync();
+                string query = "SELECT DiscordID from pathQueuers WHERE queueChannelID = ?channelID " +
+                    "AND GroupNumber = ?groupPosition AND PlaceInGroup = ?userPosition";
+                ulong discordID = 0;
+                MySqlCommand command = new MySqlCommand(query, connection);
+                command.Parameters.Add("?channelID", MySqlDbType.VarChar, 40).Value = ctx.Channel.Id;
+                command.Parameters.Add("?groupPosition", MySqlDbType.Int32).Value = groupPosition;
+                command.Parameters.Add("?userPosition", MySqlDbType.Int32).Value = userPosition;
+                await connection.OpenAsync();
+                MySqlDataReader reader = command.ExecuteReader();
+                if (!reader.HasRows)
+                {
+                    var msg = await ctx.Channel.SendMessageAsync("Could not find any user at this position.").ConfigureAwait(false);
+                    reader.Close();
+                    await connection.CloseAsync();
+                    StartTimer(msg);
+                    return;
+                }
+                else
+                {
+                    while (reader.Read())
+                    {
+                        discordID = reader.GetUInt64("DiscordID");
+                    }
+                    reader.Close();
+                    await connection.CloseAsync();
+
+                    string code = await GetCodeFromChannelId(ctx.Channel.Id);
+
+                    if (!await IsUserBannedFromQueue(code, discordID))
+                    {
+                        query = "Insert Into pathQueueBans (DiscordID, queueChannelID) values (?discordID, ?queueChannelID)";
+                        command = new MySqlCommand(query, connection);
+                        command.Parameters.Add("?discordID", MySqlDbType.VarChar, 40).Value = discordID;
+                        command.Parameters.Add("?queueChannelID", MySqlDbType.VarChar, 40).Value = ctx.Channel.Id;
+                        await connection.OpenAsync();
+                        await command.ExecuteNonQueryAsync();
+                        await connection.CloseAsync();
+
+                        query = "DELETE from pathQueuers WHERE queueChannelID = ?channelID " +
+                                "AND GroupNumber = ?groupPosition AND PlaceInGroup = ?userPosition";
+                        command = new MySqlCommand(query, connection);
+                        command.Parameters.Add("?channelID", MySqlDbType.VarChar, 40).Value = ctx.Channel.Id;
+                        command.Parameters.Add("?groupPosition", MySqlDbType.Int32).Value = groupPosition;
+                        command.Parameters.Add("?userPosition", MySqlDbType.Int32).Value = userPosition;
+                        await connection.OpenAsync();
+                        command.ExecuteNonQuery();
+                        await connection.CloseAsync();
+
+                        var bannedUser = await ctx.Guild.GetMemberAsync(discordID).ConfigureAwait(false);
+                        var msg = await ctx.Channel.SendMessageAsync($"{bannedUser.DisplayName} has been banned from your queue session").ConfigureAwait(false);
+                        StartTimer(msg);
+                    }
+                    else
+                    {
+                        var bannedUser = await ctx.Guild.GetMemberAsync(discordID).ConfigureAwait(false);
+                        var msg = await ctx.Channel.SendMessageAsync($"{bannedUser.DisplayName} is already banned from your queue").ConfigureAwait(false);
+                        StartTimer(msg);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                var msg = await ctx.Channel.SendMessageAsync("An error has occured while running this command").ConfigureAwait(false);
+                Console.Out.WriteLine(ex.Message);
+                Console.Out.WriteLine(ex.StackTrace);
+                StartTimer(msg);
+            }
+        }
+
+        private async Task<string> GetCodeFromChannelId(ulong channelId)
+        {
+            string code = "";
+            MySqlConnection connection = await GetDBConnectionAsync();
+            string query = "Select sessionCode from pathQueues where privateChannelID = ?channelID";
+            MySqlCommand command = new MySqlCommand(query, connection);
+            command.Parameters.Add("?channelID", MySqlDbType.VarChar, 40).Value = channelId;
+            await connection.OpenAsync();
+            var reader = command.ExecuteReader();
+            if (reader.HasRows)
+            {
+                while (reader.Read())
+                {
+                    code = reader.GetString("sessionCode");
+                }
+            }
+
+            return code;
+        }
+
+        private async Task<bool> IsUserBannedFromQueue(string code, ulong discordId)
+        {
+            ulong channelId = await GetPrivateChannelFromCode(code);
+            MySqlConnection connection = await GetDBConnectionAsync();
+            string query = "Select DiscordID from pathQueueBans Where DiscordID = ?discordID AND queueChannelID = ?channelId";
+            MySqlCommand command = new MySqlCommand(query, connection);
+            command.Parameters.Add("?discordID", MySqlDbType.VarChar, 40).Value = discordId;
+            command.Parameters.Add("?channelId", MySqlDbType.VarChar, 40).Value = channelId;
+            await connection.OpenAsync();
+            var reader = command.ExecuteReader();
+            bool isBanned = reader.HasRows;
+            reader.Close();
+            await connection.CloseAsync();
+
+            return isBanned;
+        }
+
         private async Task<int> GetMaxVisitorsAtOnceFromCode(string code)
         {
             MySqlConnection connection = await GetDBConnectionAsync();
@@ -773,28 +935,30 @@ namespace ThePathBot.Commands.QueueCommands
         }
 
         private async void CreateQueueEmbed(string turnipPrice, CommandContext ctx, DiscordChannel channel, string attachment,
-            string maxSize, string dodoCode, string message)
+            string maxSize, string dodoCode, string message, bool isDaisy)
         {
             string sessionCode = new AlphaNumericStringGenerator().GetRandomUppercaseAlphaNumericValue(5);
+            string embedTitle = isDaisy ? $"Daisy selling turnips for {turnipPrice}" : $"Nooks buying turnips for {turnipPrice}";
             var queueEmbed = new DiscordEmbedBuilder
             {
-                Title = $"Nooks buying turnips for {turnipPrice}",
+                Title = embedTitle,
                 ImageUrl = attachment,
                 Description = $"To join type ```?join {sessionCode}```"
             };
-            var postChannel = ctx.Guild.GetChannel(turnipPostChannel);
+            ulong postChannelId = isDaisy ? daisyMaeChannel : turnipPostChannel;
+            var postChannel = ctx.Guild.GetChannel(postChannelId);
             var queueMsg = await postChannel.SendMessageAsync(embed: queueEmbed).ConfigureAwait(false);
 
-            await InsertQueueIntoDBAsync(ctx.User.Id, queueMsg.Id, channel.Id, int.Parse(maxSize), dodoCode, sessionCode, message);
+            await InsertQueueIntoDBAsync(ctx.User.Id, queueMsg.Id, channel.Id, int.Parse(maxSize), dodoCode, sessionCode, message, isDaisy);
         }
 
         private async Task InsertQueueIntoDBAsync(
-            ulong queueOwner, ulong queueMessageID, ulong privateChannel, int maxVisitors, string dodoCode, string sessionCode, string message)
+            ulong queueOwner, ulong queueMessageID, ulong privateChannel, int maxVisitors, string dodoCode, string sessionCode, string message, bool isDaisy)
         {
 
             MySqlConnection connection = await GetDBConnectionAsync();
-            string query = "INSERT INTO pathQueues (queueOwner, queueMessageID, privateChannelID, maxVisitorsAtOnce, dodoCode, sessionCode, message) " +
-                "VALUES (?queueOwner, ?queueMessage, ?privateChannel, ?maxVisitors, ?dodoCode, ?sessionCode, ?message)";
+            string query = "INSERT INTO pathQueues (queueOwner, queueMessageID, privateChannelID, maxVisitorsAtOnce, dodoCode, sessionCode, message, daisy) " +
+                "VALUES (?queueOwner, ?queueMessage, ?privateChannel, ?maxVisitors, ?dodoCode, ?sessionCode, ?message, ?daisy)";
             MySqlCommand command = new MySqlCommand(query, connection);
             command.Parameters.Add("?queueOwner", MySqlDbType.VarChar, 40).Value = queueOwner.ToString();
             command.Parameters.Add("?queueMessage", MySqlDbType.VarChar, 40).Value = queueMessageID.ToString();
@@ -803,6 +967,7 @@ namespace ThePathBot.Commands.QueueCommands
             command.Parameters.Add("?dodoCode", MySqlDbType.VarChar, 5).Value = dodoCode;
             command.Parameters.Add("?sessionCode", MySqlDbType.VarChar, 5).Value = sessionCode;
             command.Parameters.Add("?message", MySqlDbType.VarChar, 255).Value = message;
+            command.Parameters.Add("?daisy", MySqlDbType.Int16).Value = isDaisy;
             connection.Open();
             command.ExecuteNonQuery();
             connection.Close();
