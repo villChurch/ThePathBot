@@ -955,22 +955,29 @@ namespace ThePathBot.Commands.QueueCommands
         private async Task InsertQueueIntoDBAsync(
             ulong queueOwner, ulong queueMessageID, ulong privateChannel, int maxVisitors, string dodoCode, string sessionCode, string message, bool isDaisy)
         {
-
-            MySqlConnection connection = await GetDBConnectionAsync();
-            string query = "INSERT INTO pathQueues (queueOwner, queueMessageID, privateChannelID, maxVisitorsAtOnce, dodoCode, sessionCode, message, daisy) " +
-                "VALUES (?queueOwner, ?queueMessage, ?privateChannel, ?maxVisitors, ?dodoCode, ?sessionCode, ?message, ?daisy)";
-            MySqlCommand command = new MySqlCommand(query, connection);
-            command.Parameters.Add("?queueOwner", MySqlDbType.VarChar, 40).Value = queueOwner.ToString();
-            command.Parameters.Add("?queueMessage", MySqlDbType.VarChar, 40).Value = queueMessageID.ToString();
-            command.Parameters.Add("?privateChannel", MySqlDbType.VarChar, 40).Value = privateChannel.ToString();
-            command.Parameters.Add("?maxVisitors", MySqlDbType.Int32).Value = maxVisitors;
-            command.Parameters.Add("?dodoCode", MySqlDbType.VarChar, 5).Value = dodoCode;
-            command.Parameters.Add("?sessionCode", MySqlDbType.VarChar, 5).Value = sessionCode;
-            command.Parameters.Add("?message", MySqlDbType.VarChar, 255).Value = message;
-            command.Parameters.Add("?daisy", MySqlDbType.Int16).Value = isDaisy;
-            connection.Open();
-            command.ExecuteNonQuery();
-            connection.Close();
+            try
+            {
+                MySqlConnection connection = await GetDBConnectionAsync();
+                string query = "INSERT INTO pathQueues (queueOwner, queueMessageID, privateChannelID, maxVisitorsAtOnce, dodoCode, sessionCode, message, daisy) " +
+                    "VALUES (?queueOwner, ?queueMessage, ?privateChannel, ?maxVisitors, ?dodoCode, ?sessionCode, ?message, ?daisy)";
+                MySqlCommand command = new MySqlCommand(query, connection);
+                command.Parameters.Add("?queueOwner", MySqlDbType.VarChar, 40).Value = queueOwner.ToString();
+                command.Parameters.Add("?queueMessage", MySqlDbType.VarChar, 40).Value = queueMessageID.ToString();
+                command.Parameters.Add("?privateChannel", MySqlDbType.VarChar, 40).Value = privateChannel.ToString();
+                command.Parameters.Add("?maxVisitors", MySqlDbType.Int32).Value = maxVisitors;
+                command.Parameters.Add("?dodoCode", MySqlDbType.VarChar, 5).Value = dodoCode;
+                command.Parameters.Add("?sessionCode", MySqlDbType.VarChar, 5).Value = sessionCode;
+                command.Parameters.Add("?message", MySqlDbType.VarChar, 2550).Value = message;
+                command.Parameters.Add("?daisy", MySqlDbType.Int16).Value = isDaisy;
+                connection.Open();
+                command.ExecuteNonQuery();
+                connection.Close();
+            }
+            catch (Exception ex)
+            {
+                Console.Out.WriteLine(ex.Message);
+                Console.Out.WriteLine(ex.StackTrace);
+            }
         }
 
         private async Task MakeQueueInactive(ulong queueMessageID)

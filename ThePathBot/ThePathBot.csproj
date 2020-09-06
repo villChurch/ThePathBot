@@ -186,6 +186,8 @@
     <Compile Include="Commands\Admin\FridgeBoardControl.cs" />
     <Compile Include="Commands\SupportCommands\TicketSystem.cs" />
     <Compile Include="Services\TicketService.cs" />
+    <Compile Include="Commands\Admin\GeneralInfoCommands.cs" />
+    <Compile Include="Attributes\OwnerOrPermission.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
@@ -207,6 +209,7 @@
     <Folder Include="Commands\QueueCommands\" />
     <Folder Include="Services\" />
     <Folder Include="Commands\SupportCommands\" />
+    <Folder Include="Attributes\" />
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
 </Project>
