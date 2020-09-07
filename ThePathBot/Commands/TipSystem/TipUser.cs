@@ -169,13 +169,11 @@ namespace ThePathBot.Commands.TipSystem
             dbCon.databasePort = configJson.databasePort;
             MySqlConnection connection = new MySqlConnection(dbCon.connectionString);
 
-            DiscordUser userToTip = member;
+            int currentTotal = GetTotal(member.Id, connection) - 1;
+            DiscordMember recipient = await ctx.Guild.GetMemberAsync(member.Id);
+            UpdateTotal(member.Id, currentTotal + tip, connection);
 
-            int currentTotal = GetTotal(userToTip.Id, connection) - 1;
-            DiscordMember recipient = await ctx.Guild.GetMemberAsync(userToTip.Id);
-            UpdateTotal(userToTip.Id, currentTotal + tip, connection);
-
-            UpdateRoles(currentTotal + tip, userToTip.Id, ctx);
+            UpdateRoles(currentTotal + tip, member.Id, ctx);
 
             await ctx.Channel.SendMessageAsync($"Succesfully given " +
                 $"{recipient.DisplayName} {tip} tips.").ConfigureAwait(false);
