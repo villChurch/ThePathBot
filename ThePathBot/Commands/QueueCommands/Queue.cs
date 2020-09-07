@@ -45,9 +45,17 @@ namespace ThePathBot.Commands.QueueCommands
 
         private async void DestructMessage(object source, ElapsedEventArgs e, DiscordMessage msg)
         {
-            await msg.DeleteAsync();
-            msgDestructTimer.Stop();
-            msgDestructTimer.Dispose();
+            try
+            {
+                await msg.DeleteAsync();
+                msgDestructTimer.Stop();
+                msgDestructTimer.Dispose();
+            }
+            catch (Exception ex)
+            {
+                Console.Out.WriteLine(ex.Message);
+                Console.Out.WriteLine(ex.StackTrace);
+            }
         }
 
         [Command("create")]
