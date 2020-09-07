@@ -41,7 +41,7 @@ namespace ThePathBot.Services
                 DSharpPlus.ChannelType.Text, ctx.Guild.GetChannel(privateChannelGroup));
             //Then give the user access to the channel
             await newChannel.AddOverwriteAsync(ctx.Member, DSharpPlus.Permissions.AccessChannels);
-            await QueueDialogue(ctx, newChannel);
+            await QueueDialogue(ctx, newChannel, false);
             if (!timedOut)
             {
                 var dodoMsg = await newChannel.SendMessageAsync(embed: sessionEmbed).ConfigureAwait(false);
@@ -63,15 +63,16 @@ namespace ThePathBot.Services
                 if (result.TimedOut)
                 {
                     //close channel
+                    await newChannel.DeleteAsync();
                 }
                 else
                 {
-                    await QueueDialogue(ctx, newChannel);
+                    await QueueDialogue(ctx, newChannel, true);
                 }
             }
         }
 
-        private async Task QueueDialogue(CommandContext ctx, DiscordChannel newChannel)
+        private async Task QueueDialogue(CommandContext ctx, DiscordChannel newChannel, bool secondTime)
         {
             bool ready = false;
             var interactivity = ctx.Client.GetInteractivity();
@@ -93,6 +94,10 @@ namespace ThePathBot.Services
                 {
                     await newChannel.SendMessageAsync("Queue creation has timed out.").ConfigureAwait(false);
                     timedOut = true;
+                    if (secondTime)
+                    {
+                        await newChannel.DeleteAsync();
+                    }
                     break;
                 }
                 isDaisy = daisyOrNooks.Result.Emoji == daisy;
@@ -106,6 +111,10 @@ namespace ThePathBot.Services
                 {
                     await newChannel.SendMessageAsync("Queue creation has timed out.").ConfigureAwait(false);
                     timedOut = true;
+                    if (secondTime)
+                    {
+                        await newChannel.DeleteAsync();
+                    }
                     break;
                 }
 
@@ -129,6 +138,10 @@ namespace ThePathBot.Services
                 {
                     await newChannel.SendMessageAsync("Queue creation has timed out.").ConfigureAwait(false);
                     timedOut = true;
+                    if (secondTime)
+                    {
+                        await newChannel.DeleteAsync();
+                    }
                     break;
                 }
 
@@ -153,6 +166,10 @@ namespace ThePathBot.Services
                 {
                     await newChannel.SendMessageAsync("Queue creation has timed out.").ConfigureAwait(false);
                     timedOut = true;
+                    if (secondTime)
+                    {
+                        await newChannel.DeleteAsync();
+                    }
                     break;
                 }
 
@@ -173,6 +190,10 @@ namespace ThePathBot.Services
                 {
                     await newChannel.SendMessageAsync("Queue creation has timed out.").ConfigureAwait(false);
                     timedOut = true;
+                    if (secondTime)
+                    {
+                        await newChannel.DeleteAsync();
+                    }
                     break;
                 }
 
@@ -195,6 +216,10 @@ namespace ThePathBot.Services
                 {
                     await newChannel.SendMessageAsync("Queue creation has timed out.").ConfigureAwait(false);
                     timedOut = true;
+                    if (secondTime)
+                    {
+                        await newChannel.DeleteAsync();
+                    }
                     break;
                 }
 
