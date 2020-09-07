@@ -143,6 +143,7 @@ namespace ThePathBot
             Services = new ServiceCollection()
                 .AddSingleton<ReactionService>()
                 .AddScoped<TicketService>()
+                .AddScoped<QueueService>()
                 .BuildServiceProvider(true);
 #pragma warning restore CS1702 // Assuming assembly reference matches identity
 

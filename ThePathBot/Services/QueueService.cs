@@ -21,8 +21,8 @@ namespace ThePathBot.Services
     "```?kick groupNumber positionIngroup``` To end your session run ```?endqueue```",
             Color = DiscordColor.Blurple
         };
-        private readonly ulong privateChannelGroup = 745024494464270448; //test server 744273831602028645;
-        private readonly ulong turnipPostChannel = 744733259748999270; //test server 744644693479915591;
+        private readonly ulong privateChannelGroup = 744273831602028645; // honna 745024494464270448; //test server 744273831602028645;
+        private readonly ulong turnipPostChannel = 744644693479915591; // honna 744733259748999270; //test server 744644693479915591;
         private readonly ulong daisyMaeChannel = 744733207148232845;
         private readonly string configFilePath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
 
@@ -42,14 +42,15 @@ namespace ThePathBot.Services
             DiscordEmoji no = DiscordEmoji.FromName(ctx.Client, ":x:");
             // nooks :70xTimmy:
             // Daisy :70zdaisymae:
-            DiscordEmoji daisy = DiscordEmoji.FromName(ctx.Client, ":70zdaisymae:");
-            DiscordEmoji nooks = DiscordEmoji.FromName(ctx.Client, ":70xTimmy:");
+            DiscordEmoji daisy = DiscordEmoji.FromName(ctx.Client, ":thumbsup:"); //":70zdaisymae:");
+            DiscordEmoji nooks = DiscordEmoji.FromName(ctx.Client, ":thumbsdown:"); //":70xTimmy:");
             string turnipPrice = "0";
             string attachment = "";
             string maxGroupSize = "0";
             string dodoCode = "";
             string message = "Welcome";
             bool isDaisy = false;
+            bool timedOut = false;
             while (!ready)
             {
                 var daisyNooksMessage = await newChannel.SendMessageAsync($"React {daisy} for daisy session or {nooks} for turnip session").ConfigureAwait(false);
@@ -58,12 +59,25 @@ namespace ThePathBot.Services
 
                 var daisyOrNooks = await interactivity.WaitForReactionAsync(react => (react.Emoji == daisy ||
                 react.Emoji == nooks) && react.User == ctx.User, TimeSpan.FromMinutes(2)).ConfigureAwait(false);
+                if (daisyOrNooks.TimedOut)
+                {
+                    await newChannel.SendMessageAsync("Queue creation has timed out.").ConfigureAwait(false);
+                    timedOut = true;
+                    break;
+                }
                 isDaisy = daisyOrNooks.Result.Emoji == daisy;
 
                 bool responseCorrect = true;
                 await newChannel.SendMessageAsync("Enter your Dodo Code").ConfigureAwait(false);
 
                 var msg = await interactivity.WaitForMessageAsync(x => x.Channel == newChannel && x.Author == ctx.Member).ConfigureAwait(false);
+
+                if (msg.TimedOut)
+                {
+                    await newChannel.SendMessageAsync("Queue creation has timed out.").ConfigureAwait(false);
+                    timedOut = true;
+                    break;
+                }
 
                 dodoCode = msg.Result.Content;
                 if (msg.Result.Content.ToLower() == "cancel")
@@ -80,6 +94,13 @@ namespace ThePathBot.Services
                 await newChannel.SendMessageAsync("Enter your price").ConfigureAwait(false);
 
                 msg = await interactivity.WaitForMessageAsync(x => x.Channel == newChannel && x.Author == ctx.Member).ConfigureAwait(false);
+
+                if (msg.TimedOut)
+                {
+                    await newChannel.SendMessageAsync("Queue creation has timed out.").ConfigureAwait(false);
+                    timedOut = true;
+                    break;
+                }
 
                 turnipPrice = msg.Result.Content;
 
@@ -98,6 +119,13 @@ namespace ThePathBot.Services
 
                 msg = await interactivity.WaitForMessageAsync(x => x.Channel == newChannel && x.Author == ctx.Member).ConfigureAwait(false);
 
+                if (msg.TimedOut)
+                {
+                    await newChannel.SendMessageAsync("Queue creation has timed out.").ConfigureAwait(false);
+                    timedOut = true;
+                    break;
+                }
+
                 if (msg.Result.Content.ToLower() == "cancel")
                 {
                     await newChannel.DeleteAsync();
@@ -110,6 +138,13 @@ namespace ThePathBot.Services
                 msg = await interactivity.WaitForMessageAsync(x => x.Channel == newChannel && x.Author == ctx.Member).ConfigureAwait(false);
 
                 maxGroupSize = msg.Result.Content;
+
+                if (msg.TimedOut)
+                {
+                    await newChannel.SendMessageAsync("Queue creation has timed out.").ConfigureAwait(false);
+                    timedOut = true;
+                    break;
+                }
 
                 if (msg.Result.Content.ToLower() == "cancel")
                 {
@@ -125,6 +160,13 @@ namespace ThePathBot.Services
                 await newChannel.SendMessageAsync("Please send a photo of your price").ConfigureAwait(false);
 
                 var attachmentMsg = await interactivity.WaitForMessageAsync(x => x.Channel == newChannel && x.Author == ctx.Member && x.Attachments.Count > 0).ConfigureAwait(false);
+
+                if (attachmentMsg.TimedOut)
+                {
+                    await newChannel.SendMessageAsync("Queue creation has timed out.").ConfigureAwait(false);
+                    timedOut = true;
+                    break;
+                }
 
                 attachment = attachmentMsg.Result.Attachments[0].Url;
 
@@ -173,9 +215,12 @@ namespace ThePathBot.Services
                     await newChannel.SendMessageAsync("Parts of your response was incorrect please try again").ConfigureAwait(false);
                 }
             }
-            var dodoMsg = await newChannel.SendMessageAsync(embed: sessionEmbed).ConfigureAwait(false);
+            if (!timedOut)
+            {
+                var dodoMsg = await newChannel.SendMessageAsync(embed: sessionEmbed).ConfigureAwait(false);
 
-            CreateQueueEmbed(turnipPrice, ctx, newChannel, attachment, maxGroupSize, dodoCode, message, isDaisy);
+                CreateQueueEmbed(turnipPrice, ctx, newChannel, attachment, maxGroupSize, dodoCode, message, isDaisy);
+            }
         }
 
         private async void CreateQueueEmbed(string turnipPrice, CommandContext ctx, DiscordChannel channel, string attachment,

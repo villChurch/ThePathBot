@@ -12,6 +12,7 @@ using DSharpPlus.Interactivity;
 using MySql.Data.MySqlClient;
 using Newtonsoft.Json;
 using ThePathBot.Models;
+using ThePathBot.Services;
 using ThePathBot.Utilities;
 
 namespace ThePathBot.Commands.QueueCommands
@@ -56,6 +57,11 @@ namespace ThePathBot.Commands.QueueCommands
                 };
                 await ctx.Channel.SendMessageAsync(embed: embed).ConfigureAwait(false);
                 return;
+            }
+            else
+            {
+                QueueService qs = new QueueService();
+                await qs.CreateQueue(ctx);
             }
         }
 
