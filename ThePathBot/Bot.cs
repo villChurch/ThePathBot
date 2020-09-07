@@ -57,6 +57,7 @@ namespace ThePathBot
             ConfigJson configJson = JsonConvert.DeserializeObject<ConfigJson>(json);
             dbCon.DatabaseName = configJson.databaseName;
             dbCon.Password = configJson.databasePassword;
+            dbCon.databaseServer = configJson.databaseServer;
             dbCon.databaseUser = configJson.databaseUser;
             dbCon.databasePort = configJson.databasePort;
             MySqlConnection connection = new MySqlConnection(dbCon.connectionString);

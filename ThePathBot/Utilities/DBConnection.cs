@@ -7,6 +7,8 @@ namespace ThePathBot.Utilities
 
         public string databaseUser { get; set; }
         public string Password { get; set; }
+        public string databaseServer { get; set; }
+        public string databasePort { get; set; }
 
         private static DBConnection _instance = null;
         public static DBConnection Instance()
@@ -16,7 +18,7 @@ namespace ThePathBot.Utilities
             return _instance;
         }
 
-        public string databasePort { get; set; }
-        public string connectionString => $"Server=192.168.1.125; Port={databasePort}; database={DatabaseName}; UID={databaseUser}; password={Password}";
+        
+        public string connectionString => $"Server={databaseServer}; Port={databasePort}; database={DatabaseName}; UID={databaseUser}; password={Password}";
     }
 }

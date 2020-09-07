@@ -132,7 +132,7 @@ namespace ThePathBot.Commands.TipSystem
         [Command("givetips")]
         [Hidden]
         [RequireUserPermissions(DSharpPlus.Permissions.BanMembers)]
-        public async Task GiveTips(CommandContext ctx, params string[] user)
+        public async Task GiveTips(CommandContext ctx, DiscordMember member, [RemainingText] int tip)
         {
             if (ctx.Guild.Id == 694013861560320081)
             {
@@ -147,21 +147,6 @@ namespace ThePathBot.Commands.TipSystem
             }
             IReadOnlyList<DiscordUser> mentionedUser = ctx.Message.MentionedUsers;
             if (mentionedUser.Count < 1)
-            {
-                return;
-            }
-            List<string> messages = new List<string>(user);
-
-            foreach (DiscordUser mention in mentionedUser)
-            {
-                messages.Remove(mention.Mention);
-                messages.Remove(mention.Mention.Replace("<@!", "<@"));
-            }
-            string message = string.Join("", messages);
-
-            bool successfullyParsed = int.TryParse(message, out int numberToGive);
-
-            if (!successfullyParsed)
             {
                 return;
             }
@@ -184,16 +169,16 @@ namespace ThePathBot.Commands.TipSystem
             dbCon.databasePort = configJson.databasePort;
             MySqlConnection connection = new MySqlConnection(dbCon.connectionString);
 
-            DiscordUser userToTip = mentionedUser[0];
+            DiscordUser userToTip = member;
 
             int currentTotal = GetTotal(userToTip.Id, connection) - 1;
             DiscordMember recipient = await ctx.Guild.GetMemberAsync(userToTip.Id);
-            UpdateTotal(userToTip.Id, currentTotal + numberToGive, connection);
+            UpdateTotal(userToTip.Id, currentTotal + tip, connection);
 
-            UpdateRoles(currentTotal + numberToGive, userToTip.Id, ctx);
+            UpdateRoles(currentTotal + tip, userToTip.Id, ctx);
 
             await ctx.Channel.SendMessageAsync($"Succesfully given " +
-                $"{recipient.DisplayName} {numberToGive} tips.").ConfigureAwait(false);
+                $"{recipient.DisplayName} {tip} tips.").ConfigureAwait(false);
         }
 
         [Command("showtips")]
