@@ -25,6 +25,13 @@ namespace ThePathBot.Services
         private readonly ulong turnipPostChannel = 744644693479915591; // honna 744733259748999270; //test server 744644693479915591;
         private readonly ulong daisyMaeChannel = 744733207148232845;
         private readonly string configFilePath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+        string turnipPrice = "0";
+        string attachment = "";
+        string maxGroupSize = "0";
+        string dodoCode = "";
+        string message = "Welcome";
+        bool isDaisy = false;
+        bool timedOut = false;
 
         public async Task CreateQueue(CommandContext ctx)
         {
@@ -34,8 +41,38 @@ namespace ThePathBot.Services
                 DSharpPlus.ChannelType.Text, ctx.Guild.GetChannel(privateChannelGroup));
             //Then give the user access to the channel
             await newChannel.AddOverwriteAsync(ctx.Member, DSharpPlus.Permissions.AccessChannels);
+            await QueueDialogue(ctx, newChannel);
+            if (!timedOut)
+            {
+                var dodoMsg = await newChannel.SendMessageAsync(embed: sessionEmbed).ConfigureAwait(false);
 
-            // Now we can get some information
+                CreateQueueEmbed(turnipPrice, ctx, newChannel, attachment, maxGroupSize, dodoCode, message, isDaisy);
+            }
+            else
+            {
+                var message = await newChannel.SendMessageAsync("Your queue creation timed out. React with :thumbsup: to restart or :thumbsdown: to end." +
+                    " This message will time out in 4 minutes and end automatically if not.").ConfigureAwait(false);
+                DiscordEmoji thumbsup = DiscordEmoji.FromName(ctx.Client, ":thumbsup:");
+                DiscordEmoji thumbsDown = DiscordEmoji.FromName(ctx.Client, ":thumbsdown:");
+                await message.CreateReactionAsync(thumbsup);
+                await message.CreateReactionAsync(thumbsDown);
+                var interactivity = ctx.Client.GetInteractivity();
+                var result = await interactivity.WaitForReactionAsync(react => (react.Emoji == thumbsup ||
+                react.Emoji == thumbsDown) && react.User == ctx.User, TimeSpan.FromMinutes(4)).ConfigureAwait(false);
+
+                if (result.TimedOut)
+                {
+                    //close channel
+                }
+                else
+                {
+                    await QueueDialogue(ctx, newChannel);
+                }
+            }
+        }
+
+        private async Task QueueDialogue(CommandContext ctx, DiscordChannel newChannel)
+        {
             bool ready = false;
             var interactivity = ctx.Client.GetInteractivity();
             DiscordEmoji yes = DiscordEmoji.FromName(ctx.Client, ":white_check_mark:");
@@ -44,13 +81,6 @@ namespace ThePathBot.Services
             // Daisy :70zdaisymae:
             DiscordEmoji daisy = DiscordEmoji.FromName(ctx.Client, ":thumbsup:"); //":70zdaisymae:");
             DiscordEmoji nooks = DiscordEmoji.FromName(ctx.Client, ":thumbsdown:"); //":70xTimmy:");
-            string turnipPrice = "0";
-            string attachment = "";
-            string maxGroupSize = "0";
-            string dodoCode = "";
-            string message = "Welcome";
-            bool isDaisy = false;
-            bool timedOut = false;
             while (!ready)
             {
                 var daisyNooksMessage = await newChannel.SendMessageAsync($"React {daisy} for daisy session or {nooks} for turnip session").ConfigureAwait(false);
@@ -214,12 +244,6 @@ namespace ThePathBot.Services
                 {
                     await newChannel.SendMessageAsync("Parts of your response was incorrect please try again").ConfigureAwait(false);
                 }
-            }
-            if (!timedOut)
-            {
-                var dodoMsg = await newChannel.SendMessageAsync(embed: sessionEmbed).ConfigureAwait(false);
-
-                CreateQueueEmbed(turnipPrice, ctx, newChannel, attachment, maxGroupSize, dodoCode, message, isDaisy);
             }
         }
 
