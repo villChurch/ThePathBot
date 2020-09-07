@@ -67,7 +67,8 @@ CREATE TABLE `fridgeBoardConfig` (
   `GuildID` varchar(40) NOT NULL,
   `fridgeBoardChannelID` varchar(40) NOT NULL,
   `UpdatedByID` varchar(40) NOT NULL,
-  `trophiesNeeded` int(11) NOT NULL DEFAULT '5'
+  `trophiesNeeded` int(11) NOT NULL DEFAULT '5',
+  `roleIdToGive` varchar(40) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- --------------------------------------------------------
