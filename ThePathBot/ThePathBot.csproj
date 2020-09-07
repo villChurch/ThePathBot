@@ -188,6 +188,7 @@
     <Compile Include="Services\TicketService.cs" />
     <Compile Include="Commands\Admin\GeneralInfoCommands.cs" />
     <Compile Include="Attributes\OwnerOrPermission.cs" />
+    <Compile Include="Services\QueueService.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
