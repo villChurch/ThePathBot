@@ -1,6 +1,7 @@
-
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 15
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.30204.135
+MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ThePathBot", "ThePathBot\ThePathBot.csproj", "{68377AB4-6CD6-4407-B405-D12509A36BE9}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{D0E49499-7A32-4F0F-B8DD-003916EE4A92}"
@@ -14,9 +15,15 @@ Global
 		Release|anycpu = Release|anycpu
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{68377AB4-6CD6-4407-B405-D12509A36BE9}.Debug|anycpu.ActiveCfg = Debug|anycpu
-		{68377AB4-6CD6-4407-B405-D12509A36BE9}.Debug|anycpu.Build.0 = Debug|anycpu
-		{68377AB4-6CD6-4407-B405-D12509A36BE9}.Release|anycpu.ActiveCfg = Release|anycpu
-		{68377AB4-6CD6-4407-B405-D12509A36BE9}.Release|anycpu.Build.0 = Release|anycpu
+		{68377AB4-6CD6-4407-B405-D12509A36BE9}.Debug|anycpu.ActiveCfg = Debug|Any CPU
+		{68377AB4-6CD6-4407-B405-D12509A36BE9}.Debug|anycpu.Build.0 = Debug|Any CPU
+		{68377AB4-6CD6-4407-B405-D12509A36BE9}.Release|anycpu.ActiveCfg = Release|Any CPU
+		{68377AB4-6CD6-4407-B405-D12509A36BE9}.Release|anycpu.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {73D0C2DB-99F2-4143-B759-128176552135}
 	EndGlobalSection
 EndGlobal
