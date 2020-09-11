@@ -221,8 +221,8 @@ namespace ThePathBot.Commands.QueueCommands
                 var dodoMsg = await newChannel.SendMessageAsync(embed: sessionEmbed).ConfigureAwait(false);
 
                 CreateQueueEmbed(turnipPrice, ctx, newChannel, attachment, maxGroupSize, dodoCode, message, isDaisy);
-                int.TryParse(turnipPrice, out int price);
-                if (ctx.Guild.Id == 744699540212416592 && price >= 500)
+                int.TryParse(turnipPrice, out int tprice);
+                if (ctx.Guild.Id == 744699540212416592 && tprice >= 500)
                 {
                     DiscordRole turnipRole; //753724832423870577
                     turnipRole = ctx.Guild.GetRole(753724832423870577);
