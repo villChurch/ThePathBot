@@ -497,7 +497,6 @@ namespace ThePathBot.Commands.QueueCommands
                     {
                         var msg = await ctx.Channel.SendMessageAsync("There is no active queue associated with this channel.").ConfigureAwait(false);
                         reader.Close();
-                        connection.Close();
                         StartTimer(msg);
                         returnEarly = true;
                     }
@@ -567,6 +566,7 @@ namespace ThePathBot.Commands.QueueCommands
 
                     await dmChannel.SendMessageAsync(embed: embed).ConfigureAwait(false);
                 }
+                await ctx.Channel.SendMessageAsync("Code sent to next people in the queue").ConfigureAwait(false);
             }
             catch (Exception ex)
             {
