@@ -90,6 +90,10 @@ namespace ThePathBot.Listeners
             else
             {
                 embed.AddField("Message", originalMessage.Content, false);
+                if (originalMessage.Attachments.Count > 0)
+                {
+                    embed.ImageUrl = originalMessage.Attachments[0].Url;
+                }
             }
 
             embed.AddField("Original", $"[Jump!]({originalMessage.JumpLink.AbsoluteUri})", false);
