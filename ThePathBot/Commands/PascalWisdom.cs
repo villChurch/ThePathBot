@@ -14,50 +14,43 @@ namespace ThePathBot.Commands
 {
     public class PascalWisdom : BaseCommandModule
     {
-        private string configFilePath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+        private readonly DBConnectionUtils dBConnectionUtils = new DBConnectionUtils();
 
         [Command("wisdom")]
         public async Task getWisdom(CommandContext ctx)
         {
-            var dbCon = DBConnection.Instance();
-            var json = string.Empty;
-
-            using (var fs =
-                File.OpenRead(configFilePath + "/config.json")
-            )
-            using (var sr = new StreamReader(fs, new UTF8Encoding(false)))
-                json = await sr.ReadToEndAsync().ConfigureAwait(false);
-
-            var configJson = JsonConvert.DeserializeObject<ConfigJson>(json);
-            dbCon.DatabaseName = configJson.databaseName;
-            dbCon.Password = configJson.databasePassword;
-            dbCon.databaseUser = configJson.databaseUser;
-            dbCon.databasePort = configJson.databasePort;
-            Console.Out.WriteLine(dbCon.connectionString);
-            string query = "Select text from pascalWisdom";
-
-            List<string> quotes = new List<string>();
-            MySqlConnection connection = new MySqlConnection(dbCon.connectionString);
-            var command = new MySqlCommand(query, connection);
-            connection.Open();
-            MySqlDataReader reader = command.ExecuteReader();
-            while (reader.Read())
+            try
             {
-                quotes.Add(reader.GetString("text"));
+                List<string> quotes = new List<string>();
+                using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
+                {
+                    string query = "Select text from pascalWisdom";
+                    var command = new MySqlCommand(query, connection);
+                    connection.Open();
+                    MySqlDataReader reader = command.ExecuteReader();
+                    while (reader.Read())
+                    {
+                        quotes.Add(reader.GetString("text"));
+                    }
+
+                }
+
+                Random rnd = new Random();
+                int quoteNumber = rnd.Next(0, quotes.Count);
+
+                var embed = new DiscordEmbedBuilder
+                {
+                    Description = quotes[quoteNumber].Trim(),
+                    Color = DiscordColor.Blurple
+                };
+
+                await ctx.Channel.SendMessageAsync(embed: embed).ConfigureAwait(false);
             }
-
-            connection.Close();
-
-            Random rnd = new Random();
-            int quoteNumber = rnd.Next(0, quotes.Count);
-
-            var embed = new DiscordEmbedBuilder
+            catch (Exception ex)
             {
-                Description = quotes[quoteNumber].Trim(),
-                Color = DiscordColor.Blurple
-            };
-
-            await ctx.Channel.SendMessageAsync(embed: embed).ConfigureAwait(false);
+                Console.Out.WriteLine(ex.Message);
+                Console.Out.WriteLine(ex.StackTrace);
+            }
         }
     }
 }

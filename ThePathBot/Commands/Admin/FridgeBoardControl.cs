@@ -15,7 +15,7 @@ namespace ThePathBot.Commands.Admin
     public class FridgeBoardControl : BaseCommandModule
     {
 
-        private readonly string configFilePath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+        private readonly DBConnectionUtils dBConnectionUtils = new DBConnectionUtils();
 
         [Command("fridgeSetup")]
         [Aliases("fs")]
@@ -61,19 +61,20 @@ namespace ThePathBot.Commands.Admin
 
             try
             {
-                MySqlConnection connection = await GetDBConnectionAsync();
-                string query = "Insert into fridgeBoardConfig (GuildID, fridgeBoardChannelID, UpdatedByID, trophiesNeeded, roleIdToGive) " +
-                    "Values (?guildId, ?fbcId, ?updatedId, ?trophies, ?roleIdToGive) ON Duplicate KEY UPDATE fridgeBoardChannelID = ?fbcId, " +
-                    "UpdatedByID = ?updatedId, trophiesNeeded = ?trophies, roleIdToGive = ?roleIdToGive";
-                MySqlCommand command = new MySqlCommand(query, connection);
-                command.Parameters.Add("?guildId", MySqlDbType.VarChar, 40).Value = ctx.Guild.Id;
-                command.Parameters.Add("?fbcId", MySqlDbType.VarChar, 40).Value = channel.Id;
-                command.Parameters.Add("?updatedId", MySqlDbType.VarChar, 40).Value = ctx.Member.Id;
-                command.Parameters.Add("?trophies", MySqlDbType.Int32).Value = trophiesNeeded;
-                command.Parameters.Add("?roleIdToGive", MySqlDbType.VarChar, 40).Value = roleToGive?.Id;
-                await connection.OpenAsync();
-                await command.ExecuteNonQueryAsync();
-                await connection.CloseAsync();
+                using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
+                {
+                    string query = "Insert into fridgeBoardConfig (GuildID, fridgeBoardChannelID, UpdatedByID, trophiesNeeded, roleIdToGive) " +
+                        "Values (?guildId, ?fbcId, ?updatedId, ?trophies, ?roleIdToGive) ON Duplicate KEY UPDATE fridgeBoardChannelID = ?fbcId, " +
+                        "UpdatedByID = ?updatedId, trophiesNeeded = ?trophies, roleIdToGive = ?roleIdToGive";
+                    MySqlCommand command = new MySqlCommand(query, connection);
+                    command.Parameters.Add("?guildId", MySqlDbType.VarChar, 40).Value = ctx.Guild.Id;
+                    command.Parameters.Add("?fbcId", MySqlDbType.VarChar, 40).Value = channel.Id;
+                    command.Parameters.Add("?updatedId", MySqlDbType.VarChar, 40).Value = ctx.Member.Id;
+                    command.Parameters.Add("?trophies", MySqlDbType.Int32).Value = trophiesNeeded;
+                    command.Parameters.Add("?roleIdToGive", MySqlDbType.VarChar, 40).Value = roleToGive?.Id;
+                    connection.Open();
+                    command.ExecuteNonQuery();
+                }
                 await ctx.Channel.SendMessageAsync($"Fridge Board config updated to post in {channel.Mention} and needing {trophiesNeeded} :trophy:").ConfigureAwait(false);
             }
             catch (MySqlException mySqlEx)
@@ -82,28 +83,11 @@ namespace ThePathBot.Commands.Admin
                 Console.Out.WriteLine(mySqlEx.StackTrace);
                 Console.Out.WriteLine(mySqlEx.SqlState);
             }
-        }
-
-        private async Task<MySqlConnection> GetDBConnectionAsync()
-        {
-            DBConnection dbCon = DBConnection.Instance();
-            string json = string.Empty;
-
-            using (FileStream fs =
-                File.OpenRead(configFilePath + "/config.json")
-            )
-            using (StreamReader sr = new StreamReader(fs, new UTF8Encoding(false)))
+            catch (Exception ex)
             {
-                json = await sr.ReadToEndAsync().ConfigureAwait(false);
+                Console.Out.WriteLine(ex.Message);
+                Console.Out.WriteLine(ex.StackTrace);
             }
-
-            ConfigJson configJson = JsonConvert.DeserializeObject<ConfigJson>(json);
-            dbCon.DatabaseName = configJson.databaseName;
-            dbCon.Password = configJson.databasePassword;
-            dbCon.databaseUser = configJson.databaseUser;
-            dbCon.databasePort = configJson.databasePort;
-            MySqlConnection connection = new MySqlConnection(dbCon.connectionString);
-            return connection;
         }
     }
 }

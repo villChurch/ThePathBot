@@ -27,9 +27,9 @@ namespace ThePathBot
         public InteractivityConfiguration Interactivity { get; private set; }
         private int countNumber = GetCountNumberOnRestart();
         private ulong LastCountId { get; set; }
-        private static readonly string configFilePath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
         private readonly ulong daisymaeChannelId = 744733207148232845;
-        private readonly ulong nookShopChannelId =  744733259748999270; // test channel 746852898465644544;
+        private readonly ulong nookShopChannelId = 744733259748999270; // test channel 746852898465644544;
+        private readonly DBConnectionUtils dBConnectionUtils = new DBConnectionUtils();
 
         //private static readonly DateTime UnixEpoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         private int totalMembers = 0;
@@ -43,68 +43,37 @@ namespace ThePathBot
         private static int GetCountNumberOnRestart()
         {
             int foundNumber = 0;
-            DBConnection dbCon = DBConnection.Instance();
-            string json = string.Empty;
-
-            using (FileStream fs =
-                File.OpenRead(configFilePath + "/config.json")
-            )
-            using (StreamReader sr = new StreamReader(fs, new UTF8Encoding(false)))
+            using (MySqlConnection connection = new MySqlConnection(DBConnectionUtils.ReturnPopulatedConnectionStringStatic()))
             {
-                json = sr.ReadToEnd();
-            }
 
-            ConfigJson configJson = JsonConvert.DeserializeObject<ConfigJson>(json);
-            dbCon.DatabaseName = configJson.databaseName;
-            dbCon.Password = configJson.databasePassword;
-            dbCon.databaseUser = configJson.databaseUser;
-            dbCon.databasePort = configJson.databasePort;
-            MySqlConnection connection = new MySqlConnection(dbCon.connectionString);
-
-            string query = "SELECT value FROM `configuration` WHERE item = ?item";
-            MySqlCommand command = new MySqlCommand(query, connection);
-            command.Parameters.Add("?item", MySqlDbType.VarChar, 255).Value = "countNumber";
-            connection.Open();
-            MySqlDataReader reader = command.ExecuteReader();
-            if (reader.HasRows)
-            {
-                while (reader.Read())
+                string query = "SELECT value FROM `configuration` WHERE item = ?item";
+                MySqlCommand command = new MySqlCommand(query, connection);
+                command.Parameters.Add("?item", MySqlDbType.VarChar, 255).Value = "countNumber";
+                connection.Open();
+                MySqlDataReader reader = command.ExecuteReader();
+                if (reader.HasRows)
                 {
-                    foundNumber = int.Parse(reader.GetString("value"));
+                    while (reader.Read())
+                    {
+                        foundNumber = int.Parse(reader.GetString("value"));
+                    }
                 }
+                reader.Close();
             }
-            reader.Close();
-            connection.Close();
             return foundNumber;
         }
 
         private void UpdateCountNumberInDb(int newNumber)
         {
-            DBConnection dbCon = DBConnection.Instance();
-            string json = string.Empty;
-
-            using (FileStream fs =
-                File.OpenRead(configFilePath + "/config.json")
-            )
-            using (StreamReader sr = new StreamReader(fs, new UTF8Encoding(false)))
+            using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
             {
-                json = sr.ReadToEnd();
+                string query = "UPDATE configuration SET value = ?newNumber where item = ?item";
+                MySqlCommand command = new MySqlCommand(query, connection);
+                command.Parameters.Add("?item", MySqlDbType.VarChar, 255).Value = "countNumber";
+                command.Parameters.Add("?newNumber", MySqlDbType.VarChar, 255).Value = newNumber.ToString();
+                connection.Open();
+                command.ExecuteNonQuery();
             }
-
-            ConfigJson configJson = JsonConvert.DeserializeObject<ConfigJson>(json);
-            dbCon.DatabaseName = configJson.databaseName;
-            dbCon.Password = configJson.databasePassword;
-            dbCon.databaseUser = configJson.databaseUser;
-            dbCon.databasePort = configJson.databasePort;
-            MySqlConnection connection = new MySqlConnection(dbCon.connectionString);
-
-            string query = "UPDATE configuration SET value = ?newNumber where item = ?item";
-            MySqlCommand command = new MySqlCommand(query, connection);
-            command.Parameters.Add("?item", MySqlDbType.VarChar, 255).Value = "countNumber";
-            command.Parameters.Add("?newNumber", MySqlDbType.VarChar, 255).Value = newNumber.ToString();
-            connection.Open();
-            command.ExecuteNonQuery();
-            connection.Close();
         }
 
         public async Task RunAsync()

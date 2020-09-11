@@ -1,22 +1,69 @@
 ﻿using System;
+using System.IO;
+using System.Text;
+using System.Threading.Tasks;
+using MySql.Data.MySqlClient;
+using Newtonsoft.Json;
+
 namespace ThePathBot.Utilities
 {
-    public class DBConnection
+    public class DBConnectionUtils
     {
-        public string DatabaseName { get; set; } = string.Empty;
-
-        public string databaseUser { get; set; }
-        public string Password { get; set; }
-
-        private static DBConnection _instance = null;
-        public static DBConnection Instance()
+        private readonly string configFilePath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+        public string ReturnPopulatedConnectionStringAsync()
         {
-            if (_instance == null)
-                _instance = new DBConnection();
-            return _instance;
+            string json = string.Empty;
+
+            using (FileStream fs =
+                File.OpenRead(configFilePath + "/config.json")
+            )
+            using (StreamReader sr = new StreamReader(fs, new UTF8Encoding(false)))
+            {
+                json = sr.ReadToEnd();
+            }
+
+            ConfigJson configJson = JsonConvert.DeserializeObject<ConfigJson>(json);
+
+
+            MySqlConnectionStringBuilder mcsb = new MySqlConnectionStringBuilder
+            {
+                Database = configJson.databaseName,
+                Password = configJson.databasePassword,
+                UserID = configJson.databaseUser,
+                Port = configJson.databasePort,
+                Server = configJson.databaseServer,
+                MaximumPoolSize = 300
+            };
+
+            return mcsb.ToString();
         }
 
-        public string databasePort { get; set; }
-        public string connectionString => $"Server=192.168.1.125; Port={databasePort}; database={DatabaseName}; UID={databaseUser}; password={Password}";
+        public static string ReturnPopulatedConnectionStringStatic()
+        {
+            string json = string.Empty;
+
+            using (FileStream fs =
+                File.OpenRead(Environment.GetFolderPath(Environment.SpecialFolder.Desktop) + "/config.json")
+            )
+            using (StreamReader sr = new StreamReader(fs, new UTF8Encoding(false)))
+            {
+                json = sr.ReadToEnd();
+            }
+
+            ConfigJson configJson = JsonConvert.DeserializeObject<ConfigJson>(json);
+
+
+            MySqlConnectionStringBuilder mcsb = new MySqlConnectionStringBuilder
+            {
+                Database = configJson.databaseName,
+                Password = configJson.databasePassword,
+                UserID = configJson.databaseUser,
+                Port = configJson.databasePort,
+                Server = configJson.databaseServer,
+                MaximumPoolSize = 300
+            };
+
+            return mcsb.ToString();
+        }
     }
 }
