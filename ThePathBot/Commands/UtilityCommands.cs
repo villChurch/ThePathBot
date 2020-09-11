@@ -16,7 +16,7 @@ namespace ThePathBot.Commands
 {
     public class UtilityCommands : BaseCommandModule
     {
-        private string configFilePath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+        private readonly DBConnectionUtils dBConnectionUtils = new DBConnectionUtils();
         private string botLink =
             "https://discord.com/oauth2/authorize?client_id=741036620912001045&permissions=1544551670&scope=bot";
 
@@ -78,30 +78,17 @@ namespace ThePathBot.Commands
             string discordId = ctx.Message.Author.Id.ToString();
             try
             {
-                var dbCon = DBConnection.Instance();
-                var json = string.Empty;
+                using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
+                {
 
-                using (var fs =
-                    File.OpenRead(configFilePath + "/config.json")
-                )
-                using (var sr = new StreamReader(fs, new UTF8Encoding(false)))
-                    json = await sr.ReadToEndAsync().ConfigureAwait(false);
-
-                var configJson = JsonConvert.DeserializeObject<ConfigJson>(json);
-                dbCon.DatabaseName = configJson.databaseName;
-                dbCon.Password = configJson.databasePassword;
-                dbCon.databaseUser = configJson.databaseUser;
-                dbCon.databasePort = configJson.databasePort;
-                MySqlConnection connection = new MySqlConnection(dbCon.connectionString);
-
-                string query =
-                    "INSERT INTO creatorCodes (DiscordID, CreatorCode) values (?discordid, ?creatorCode)";
-                var command = new MySqlCommand(query, connection);
-                command.Parameters.Add("?discordid", MySqlDbType.VarChar, 40).Value = discordId;
-                command.Parameters.Add("?creatorCode", MySqlDbType.VarChar, 40).Value = creatorCode.Trim();
-                connection.Open();
-                command.ExecuteNonQuery();
-                connection.Close();
+                    string query =
+                        "INSERT INTO creatorCodes (DiscordID, CreatorCode) values (?discordid, ?creatorCode)";
+                    var command = new MySqlCommand(query, connection);
+                    command.Parameters.Add("?discordid", MySqlDbType.VarChar, 40).Value = discordId;
+                    command.Parameters.Add("?creatorCode", MySqlDbType.VarChar, 40).Value = creatorCode.Trim();
+                    connection.Open();
+                    command.ExecuteNonQuery();
+                }
 
                 var successEmbed = new DiscordEmbedBuilder
                 {
@@ -117,27 +104,14 @@ namespace ThePathBot.Commands
                 if (mse.Message.Contains("Duplicate entry"))
                 {
                     string query = "UPDATE creatorCodes SET CreatorCode = ?creatorCode WHERE DiscordID = ?discordid";
-                    var dbCon = DBConnection.Instance();
-                    var json = string.Empty;
-
-                    using (var fs =
-                        File.OpenRead(configFilePath + "/config.json")
-                    )
-                    using (var sr = new StreamReader(fs, new UTF8Encoding(false)))
-                        json = await sr.ReadToEndAsync().ConfigureAwait(false);
-
-                    var configJson = JsonConvert.DeserializeObject<ConfigJson>(json);
-                    dbCon.DatabaseName = configJson.databaseName;
-                    dbCon.Password = configJson.databasePassword;
-                    dbCon.databaseUser = configJson.databaseUser;
-                    dbCon.databasePort = configJson.databasePort;
-                    MySqlConnection connection = new MySqlConnection(dbCon.connectionString);
-                    MySqlCommand command = new MySqlCommand(query, connection);
-                    command.Parameters.Add("?discordid", MySqlDbType.VarChar, 40).Value = discordId;
-                    command.Parameters.Add("?creatorCode", MySqlDbType.VarChar, 40).Value = creatorCode.Trim();
-                    connection.Open();
-                    command.ExecuteNonQuery();
-                    connection.Close();
+                    using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
+                    {
+                        MySqlCommand command = new MySqlCommand(query, connection);
+                        command.Parameters.Add("?discordid", MySqlDbType.VarChar, 40).Value = discordId;
+                        command.Parameters.Add("?creatorCode", MySqlDbType.VarChar, 40).Value = creatorCode.Trim();
+                        connection.Open();
+                        command.ExecuteNonQuery();
+                    }
 
                     var updateEmbed = new DiscordEmbedBuilder
                     {
@@ -176,37 +150,20 @@ namespace ThePathBot.Commands
                 string query =
                        "Select CreatorCode from creatorCodes WHERE DiscordID = ?discordID";
 
-                DBConnection dbCon = DBConnection.Instance();
-                string json = string.Empty;
-
-                using (FileStream fs =
-                    File.OpenRead(configFilePath + "/config.json")
-                )
-                using (StreamReader sr = new StreamReader(fs, new UTF8Encoding(false)))
-                {
-                    json = await sr.ReadToEndAsync().ConfigureAwait(false);
-                }
-
-                ConfigJson configJson = JsonConvert.DeserializeObject<ConfigJson>(json);
-                dbCon.DatabaseName = configJson.databaseName;
-                dbCon.Password = configJson.databasePassword;
-                dbCon.databaseUser = configJson.databaseUser;
-                dbCon.databasePort = configJson.databasePort;
-                Console.Out.WriteLine(dbCon.connectionString);
                 string creatorCode = "";
 
-                MySqlConnection connection = new MySqlConnection(dbCon.connectionString);
-                MySqlCommand command = new MySqlCommand(query, connection);
-
-                command.Parameters.Add("?discordid", MySqlDbType.VarChar, 40).Value = discordId;
-                connection.Open();
-                MySqlDataReader reader = command.ExecuteReader();
-                while (reader.Read())
+                using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
                 {
-                    creatorCode = reader.GetString("CreatorCode");
-                }
+                    MySqlCommand command = new MySqlCommand(query, connection);
 
-                connection.Close();
+                    command.Parameters.Add("?discordid", MySqlDbType.VarChar, 40).Value = discordId;
+                    connection.Open();
+                    MySqlDataReader reader = command.ExecuteReader();
+                    while (reader.Read())
+                    {
+                        creatorCode = reader.GetString("CreatorCode");
+                    }
+                }
 
                 var successEmbed = new DiscordEmbedBuilder
                 {
@@ -217,7 +174,7 @@ namespace ThePathBot.Commands
 
                 await ctx.Channel.SendMessageAsync(embed: successEmbed).ConfigureAwait(false);
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 Console.Out.WriteLine(ex.Message);
                 Console.Out.WriteLine(ex.StackTrace);

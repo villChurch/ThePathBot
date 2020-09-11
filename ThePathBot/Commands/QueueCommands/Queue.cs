@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -10,7 +9,6 @@ using DSharpPlus.CommandsNext.Attributes;
 using DSharpPlus.Entities;
 using DSharpPlus.Interactivity;
 using MySql.Data.MySqlClient;
-using Newtonsoft.Json;
 using ThePathBot.Models;
 using ThePathBot.Utilities;
 
@@ -21,7 +19,7 @@ namespace ThePathBot.Commands.QueueCommands
         private readonly ulong privateChannelGroup = 745024494464270448; //test server 744273831602028645;
         private readonly ulong turnipPostChannel = 744733259748999270; //test server 744644693479915591;
         private readonly ulong daisyMaeChannel = 744733207148232845;
-        private readonly string configFilePath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+        private readonly DBConnectionUtils dBConnectionUtils = new DBConnectionUtils();
         private Timer msgDestructTimer;
         private readonly DiscordEmbedBuilder sessionEmbed = new DiscordEmbedBuilder
         {
@@ -233,34 +231,31 @@ namespace ThePathBot.Commands.QueueCommands
             }
             try
             {
-                MySqlConnection connection = await GetDBConnectionAsync();
-                string query = "SELECT DiscordID, onisland, GroupNumber, PlaceInGroup from pathQueuers WHERE " +
-                    "queueChannelID = ?channelID AND visited = 0 ORDER BY TimeJoined ASC, GroupNumber ASC, PlaceInGroup ASC";
-                MySqlCommand command = new MySqlCommand(query, connection);
-                command.Parameters.Add("?channelID", MySqlDbType.VarChar, 40).Value = ctx.Channel.Id;
                 List<QueueMember> queueMembers = new List<QueueMember>();
-                connection.Open();
-                MySqlDataReader reader = command.ExecuteReader();
-                if (reader.HasRows)
+                using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
                 {
-                    while (reader.Read())
+                    string query = "SELECT DiscordID, onisland, GroupNumber, PlaceInGroup from pathQueuers WHERE " +
+                        "queueChannelID = ?channelID AND visited = 0 ORDER BY TimeJoined ASC, GroupNumber ASC, PlaceInGroup ASC";
+                    MySqlCommand command = new MySqlCommand(query, connection);
+                    command.Parameters.Add("?channelID", MySqlDbType.VarChar, 40).Value = ctx.Channel.Id;
+                    connection.Open();
+                    var reader = command.ExecuteReader();
+                    if (reader.HasRows)
                     {
-                        QueueMember member = new QueueMember(reader.GetUInt64("DiscordID"), reader.GetBoolean("onIsland"),
-                            reader.GetInt32("GroupNumber"), reader.GetInt32("PlaceInGroup"));
-                        queueMembers.Add(member);
+                        while (reader.Read())
+                        {
+                            QueueMember member = new QueueMember(reader.GetUInt64("DiscordID"), reader.GetBoolean("onIsland"),
+                                reader.GetInt32("GroupNumber"), reader.GetInt32("PlaceInGroup"));
+                            queueMembers.Add(member);
+                        }
+                    }
+                    else
+                    {
+                        //no one in queue
+                        await ctx.Channel.SendMessageAsync("Currently there is no one in your queue").ConfigureAwait(false);
+                        return;
                     }
                 }
-                else
-                {
-                    //no one in queue
-                    await ctx.Channel.SendMessageAsync("Currently there is no one in your queue").ConfigureAwait(false);
-                    reader.Close();
-                    connection.Close();
-                    return;
-                }
-                reader.Close();
-                connection.Close();
-
                 queueMembers.OrderBy(qm => qm.GroupNumber).ThenBy(qm => qm.PlaceInGroup).ToList();
                 List<QueueMember> onIslandMembers = queueMembers.FindAll(qm => qm.OnIsland == true).ToList();
                 queueMembers.RemoveAll(qm => onIslandMembers.Contains(qm));
@@ -337,7 +332,7 @@ namespace ThePathBot.Commands.QueueCommands
             }
             finally
             {
-                await ctx.Message.DeleteAsync();
+                DestructMessage(null, null, ctx.Message);
             }
 
         }
@@ -354,7 +349,7 @@ namespace ThePathBot.Commands.QueueCommands
                 StartTimer(joinMessage);
                 return;
             }
-            bool banned = await IsUserBannedFromQueue(code, ctx.Member.Id);
+            bool banned = IsUserBannedFromQueue(code, ctx.Member.Id);
 
             if (banned)
             {
@@ -366,41 +361,43 @@ namespace ThePathBot.Commands.QueueCommands
 
             try
             {
-                MySqlConnection connection = await GetDBConnectionAsync();
-                string query = "SELECT privateChannelID from pathQueues WHERE sessionCode = ?sessionCode and active = 1";
-                MySqlCommand command = new MySqlCommand(query, connection);
-                command.Parameters.Add("?sessionCode", MySqlDbType.VarChar, 5).Value = code.ToUpper();
-
+                bool validCode = true;
                 ulong queueChannelId = 0;
-
-                connection.Open();
-                var reader = command.ExecuteReader();
-                if (reader.HasRows)
+                using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
                 {
-                    while (reader.Read())
+                    string query = "SELECT privateChannelID from pathQueues WHERE sessionCode = ?sessionCode and active = 1";
+                    MySqlCommand command = new MySqlCommand(query, connection);
+                    command.Parameters.Add("?sessionCode", MySqlDbType.VarChar, 5).Value = code.ToUpper();
+                    connection.Open();
+                    var reader = command.ExecuteReader();
+                    if (reader.HasRows)
                     {
-                        queueChannelId = reader.GetUInt64("privateChannelID");
+                        while (reader.Read())
+                        {
+                            queueChannelId = reader.GetUInt64("privateChannelID");
+                        }
+                    }
+                    else
+                    {
+                        // invalid code
+                        joinMessage = await ctx.Channel.SendMessageAsync($"{ctx.Member.Mention} " +
+                            $"This is not a valid code or the queue is no longer active").ConfigureAwait(false);
+                        StartTimer(joinMessage);
+                        validCode = false;
                     }
                 }
-                else
+                if (!validCode)
                 {
-                    // invalid code
-                    joinMessage = await ctx.Channel.SendMessageAsync($"{ctx.Member.Mention} " +
-                        $"This is not a valid code or the queue is no longer active").ConfigureAwait(false);
-                    StartTimer(joinMessage);
-                    reader.Close();
-                    connection.Close();
                     return;
                 }
-                reader.Close();
-                connection.Close();
-                if (await CheckIfUserInQueue(ctx.Member.Id, queueChannelId))
+
+                if (CheckIfUserInQueue(ctx.Member.Id, queueChannelId))
                 {
                     joinMessage = await ctx.Channel.SendMessageAsync($"{ctx.Member.Mention} You are already in this queue.").ConfigureAwait(false);
                     StartTimer(joinMessage);
                     return;
                 }
-                await AddMemberToQueue(ctx.Member.Id, queueChannelId, code);
+                AddMemberToQueue(ctx.Member.Id, queueChannelId, code);
                 joinMessage = await ctx.Channel.SendMessageAsync(
                     $"{ctx.Member.Mention} You have successfully joined the queue and will be DM'd when " +
                     "it's your turn.").ConfigureAwait(false);
@@ -431,21 +428,22 @@ namespace ThePathBot.Commands.QueueCommands
 
             try
             {
-                ulong privateChannel = await GetPrivateChannelFromCode(code);
+                ulong privateChannel = GetPrivateChannelFromCode(code);
                 if (privateChannel == 0)
                 {
                     await ctx.Channel.SendMessageAsync("No active queues match this code").ConfigureAwait(false);
                     return;
                 }
-                MySqlConnection connection = await GetDBConnectionAsync();
-                MySqlCommand command = new MySqlCommand("RemoveFromQueue", connection)
+                using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
                 {
-                    CommandType = System.Data.CommandType.StoredProcedure
-                };
-                command.Parameters.Add("sesCode", MySqlDbType.VarChar, 5).Value = code;
-                connection.Open();
-                command.ExecuteNonQuery();
-                connection.Close();
+                    MySqlCommand command = new MySqlCommand("RemoveFromQueue", connection)
+                    {
+                        CommandType = System.Data.CommandType.StoredProcedure
+                    };
+                    command.Parameters.Add("sesCode", MySqlDbType.VarChar, 5).Value = code;
+                    connection.Open();
+                    command.ExecuteNonQuery();
+                }
                 var msg = await ctx.Channel.SendMessageAsync($"{ctx.Member.Mention} You are no longer in queue {code}.").ConfigureAwait(false);
                 StartTimer(msg);
                 await ctx.Message.DeleteAsync();
@@ -471,61 +469,75 @@ namespace ThePathBot.Commands.QueueCommands
             }
             try
             {
-                MySqlConnection connection = await GetDBConnectionAsync();
-                string query = "SELECT dodoCode, message, maxVisitorsAtOnce from pathQueues WHERE privateChannelID = ?channelid AND queueOwner = ?owner AND active = 1";
-                var command = new MySqlCommand(query, connection);
-                command.Parameters.Add("?channelid", MySqlDbType.VarChar, 40).Value = ctx.Channel.Id;
-                command.Parameters.Add("?owner", MySqlDbType.VarChar, 40).Value = ctx.Member.Id;
-                await connection.OpenAsync();
-                var reader = command.ExecuteReader();
+                string query;
+                MySqlCommand command;
+                bool returnEarly = false;
                 int maxPeople = 0;
                 string message = "";
                 string dodo = "";
-                if (!reader.HasRows)
-                {
-                    var msg = await ctx.Channel.SendMessageAsync("There is no active queue associated with this channel.").ConfigureAwait(false);
-                    reader.Close();
-                    connection.Close();
-                    StartTimer(msg);
-                    return;
-                }
-                while (reader.Read())
-                {
-                    maxPeople = reader.GetInt32("maxVisitorsAtOnce");
-                    message = reader.GetString("message");
-                    dodo = reader.GetString("dodoCode");
-                }
-                reader.Close();
-                await connection.CloseAsync();
-                // update current people on island
-                query = "UPDATE pathQueuers SET visited = 1 WHERE onisland = 1 AND queueChannelID = ?channelID";
-                command = new MySqlCommand(query, connection);
-                command.Parameters.Add("?channelID", MySqlDbType.VarChar, 40).Value = ctx.Channel.Id;
-                connection.Open();
-                command.ExecuteNonQuery();
-                connection.Close();
-                // get new people
-                query = "SELECT DiscordID from pathQueuers WHERE queueChannelID = ?channelID " +
-                    "AND visited = 0 AND onisland = 0 ORDER BY TimeJoined ASC LIMIT ?limit";
-                command = new MySqlCommand(query, connection);
-                command.Parameters.Add("?channelID", MySqlDbType.VarChar, 40).Value = ctx.Channel.Id;
-                command.Parameters.Add("?limit", MySqlDbType.Int32).Value = maxPeople;
-                await connection.OpenAsync();
-                reader = command.ExecuteReader();
-                if (!reader.HasRows)
-                {
-                    var msg = await ctx.Channel.SendMessageAsync("There is no one waiting in your queue currently.").ConfigureAwait(false);
-                    reader.Close();
-                    connection.Close();
-                    StartTimer(msg);
-                    return;
-                }
                 List<ulong> discordIds = new List<ulong>();
-                while (reader.Read())
+                using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
                 {
-                    discordIds.Add(reader.GetUInt64("DiscordID"));
+                    query = "SELECT dodoCode, message, maxVisitorsAtOnce from pathQueues WHERE privateChannelID = ?channelid AND queueOwner = ?owner AND active = 1";
+                    command = new MySqlCommand(query, connection);
+                    command.Parameters.Add("?channelid", MySqlDbType.VarChar, 40).Value = ctx.Channel.Id;
+                    command.Parameters.Add("?owner", MySqlDbType.VarChar, 40).Value = ctx.Member.Id;
+                    connection.Open();
+                    var reader = command.ExecuteReader();
+                    if (!reader.HasRows)
+                    {
+                        var msg = await ctx.Channel.SendMessageAsync("There is no active queue associated with this channel.").ConfigureAwait(false);
+                        reader.Close();
+                        connection.Close();
+                        StartTimer(msg);
+                        returnEarly = true;
+                    }
+                    while (reader.Read())
+                    {
+                        maxPeople = reader.GetInt32("maxVisitorsAtOnce");
+                        message = reader.GetString("message");
+                        dodo = reader.GetString("dodoCode");
+                    }
+                    reader.Close();
+                }
+                if (returnEarly)
+                {
+                    return;
                 }
 
+                using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
+                {
+                    // update current people on island
+                    query = "UPDATE pathQueuers SET visited = 1 WHERE onisland = 1 AND queueChannelID = ?channelID";
+                    command = new MySqlCommand(query, connection);
+                    command.Parameters.Add("?channelID", MySqlDbType.VarChar, 40).Value = ctx.Channel.Id;
+                    connection.Open();
+                    command.ExecuteNonQuery();
+                }
+
+                using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
+                {
+                    // get new people
+                    query = "SELECT DiscordID from pathQueuers WHERE queueChannelID = ?channelID " +
+                        "AND visited = 0 AND onisland = 0 ORDER BY TimeJoined ASC LIMIT ?limit";
+                    command = new MySqlCommand(query, connection);
+                    command.Parameters.Add("?channelID", MySqlDbType.VarChar, 40).Value = ctx.Channel.Id;
+                    command.Parameters.Add("?limit", MySqlDbType.Int32).Value = maxPeople;
+                    await connection.OpenAsync();
+                    var reader = command.ExecuteReader();
+                    if (!reader.HasRows)
+                    {
+                        var msg = await ctx.Channel.SendMessageAsync("There is no one waiting in your queue currently.").ConfigureAwait(false);
+                        reader.Close();
+                        connection.Close();
+                        StartTimer(msg);
+                        return;
+                    }
+                    while (reader.Read())
+                    {
+                        discordIds.Add(reader.GetUInt64("DiscordID"));
+                    }
+                }
                 await MoveUsersToOnIsland(discordIds, ctx.Channel.Id);
                 foreach(var user in discordIds)
                 {
@@ -543,9 +555,6 @@ namespace ThePathBot.Commands.QueueCommands
                     embed.AddField("Message From host", message);
 
                     await dmChannel.SendMessageAsync(embed: embed).ConfigureAwait(false);
-                    //List<ulong> users = new List<ulong>();
-                    //users.Add(user);
-                    //await MoveUsersToOnIsland(users);
                 }
             }
             catch (Exception ex)
@@ -565,33 +574,38 @@ namespace ThePathBot.Commands.QueueCommands
         {
             try
             {
-                MySqlConnection connection = await GetDBConnectionAsync();
-                string query = "UPDATE pathQueues SET active = 0 WHERE privateChannelID = ?channelID";
-                var command = new MySqlCommand(query, connection);
-                command.Parameters.Add("?channelID", MySqlDbType.VarChar, 40).Value = ctx.Channel.Id;
-                connection.Open();
-                command.ExecuteNonQuery();
-                connection.Close();
                 ulong messageId = 0;
                 bool isDaisy = false;
-                query = "Select queueMessageID, daisy from pathQueues WHERE privateChannelID = ?channelID";
-                command = new MySqlCommand(query, connection);
-                command.Parameters.Add("?channelID", MySqlDbType.VarChar, 40).Value = ctx.Channel.Id;
-                connection.Open();
-                var reader = command.ExecuteReader();
-                if (!reader.HasRows)
+                bool endEarly = false;
+                using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
                 {
-                    var msg = await ctx.Channel.SendMessageAsync("Could not find a queue associated with this channel. " +
-                        "Please contact a mod or admin to get the channel removed").ConfigureAwait(false);
-                    reader.Close();
+                    string query = "UPDATE pathQueues SET active = 0 WHERE privateChannelID = ?channelID";
+                    var command = new MySqlCommand(query, connection);
+                    command.Parameters.Add("?channelID", MySqlDbType.VarChar, 40).Value = ctx.Channel.Id;
+                    connection.Open();
+                    command.ExecuteNonQuery();
                     connection.Close();
-                    StartTimer(msg);
-                    return;
+                    query = "Select queueMessageID, daisy from pathQueues WHERE privateChannelID = ?channelID";
+                    command = new MySqlCommand(query, connection);
+                    command.Parameters.Add("?channelID", MySqlDbType.VarChar, 40).Value = ctx.Channel.Id;
+                    connection.Open();
+                    var reader = command.ExecuteReader();
+                    if (!reader.HasRows)
+                    {
+                        var msg = await ctx.Channel.SendMessageAsync("Could not find a queue associated with this channel. " +
+                            "Please contact a mod or admin to get the channel removed").ConfigureAwait(false);
+                        StartTimer(msg);
+                        endEarly = true;
+                    }
+                    while (reader.Read())
+                    {
+                        messageId = reader.GetUInt64("queueMessageID");
+                        isDaisy = reader.GetBoolean("daisy");
+                    }
                 }
-                while (reader.Read())
+                if (endEarly)
                 {
-                    messageId = reader.GetUInt64("queueMessageID");
-                    isDaisy = reader.GetBoolean("daisy");
+                    return;
                 }
                 ulong postChannel = isDaisy ? daisyMaeChannel : turnipPostChannel;
                 var message = await ctx.Guild.GetChannel(postChannel).GetMessageAsync(messageId);
@@ -607,7 +621,6 @@ namespace ThePathBot.Commands.QueueCommands
                 };
                 DiscordEmbed discordEmbed = newEmbed;
                 await message.ModifyAsync(embed: discordEmbed).ConfigureAwait(false);
-                //await ctx.Guild.GetChannel(turnipPostChannel).DeleteMessageAsync(message);
                 await ctx.Channel.DeleteAsync();
             }
             catch (Exception ex)
@@ -635,14 +648,14 @@ namespace ThePathBot.Commands.QueueCommands
             }
             try
             {
-                MySqlConnection connection = await GetDBConnectionAsync();
-                string query = "UPDATE pathQueues SET dodoCode = ?newcode WHERE privateChannelID = ?currentChannel";
-                var command = new MySqlCommand(query, connection);
-                command.Parameters.Add("?newcode", MySqlDbType.VarChar, 5).Value = newcode;
-                command.Parameters.Add("?currentChannel", MySqlDbType.VarChar, 40).Value = ctx.Channel.Id;
-                connection.Open();
-                command.ExecuteNonQuery();
-                connection.Close();
+                using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
+                {
+                    string query = "UPDATE pathQueues SET dodoCode = ?newcode WHERE privateChannelID = ?currentChannel";
+                    var command = new MySqlCommand(query, connection);
+                    command.Parameters.Add("?newcode", MySqlDbType.VarChar, 5).Value = newcode;
+                    command.Parameters.Add("?currentChannel", MySqlDbType.VarChar, 40).Value = ctx.Channel.Id;
+                    connection.Open();
+                }
 
                 var msg = await ctx.Channel.SendMessageAsync($"Dodo code is now updated to {newcode}").ConfigureAwait(false);
                 StartTimer(msg);
@@ -663,16 +676,17 @@ namespace ThePathBot.Commands.QueueCommands
 
         private async Task MoveUsersToOnIsland(List<ulong> discordIDs, ulong channelId)
         {
-            MySqlConnection connection = await GetDBConnectionAsync();
-            string query = "UPDATE pathQueuers SET onisland = 1 WHERE DiscordID = ?discordid AND queueChannelID = ?channelId";
             foreach (var user in discordIDs)
             {
-                var command = new MySqlCommand(query, connection);
-                command.Parameters.Add("?discordid", MySqlDbType.VarChar, 40).Value = user;
-                command.Parameters.Add("?channelId", MySqlDbType.VarChar, 40).Value = channelId;
-                connection.Open();
-                command.ExecuteNonQuery();
-                connection.Close();
+                using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
+                {
+                    string query = "UPDATE pathQueuers SET onisland = 1 WHERE DiscordID = ?discordid AND queueChannelID = ?channelId";
+                    var command = new MySqlCommand(query, connection);
+                    command.Parameters.Add("?discordid", MySqlDbType.VarChar, 40).Value = user;
+                    command.Parameters.Add("?channelId", MySqlDbType.VarChar, 40).Value = channelId;
+                    connection.Open();
+                    command.ExecuteNonQuery();
+                }
             }
         }
 
@@ -698,44 +712,53 @@ namespace ThePathBot.Commands.QueueCommands
 
             try
             {
-                MySqlConnection connection = await GetDBConnectionAsync();
                 string query = "SELECT DiscordID from pathQueuers WHERE queueChannelID = ?channelID " +
-                    "AND GroupNumber = ?groupPosition AND PlaceInGroup = ?userPosition";
-                ulong discordID = 0;
-                MySqlCommand command = new MySqlCommand(query, connection);
-                command.Parameters.Add("?channelID", MySqlDbType.VarChar, 40).Value = ctx.Channel.Id;
-                command.Parameters.Add("?groupPosition", MySqlDbType.Int32).Value = groupPos;
-                command.Parameters.Add("?userPosition", MySqlDbType.Int32).Value = result;
-                await connection.OpenAsync();
-                MySqlDataReader reader = command.ExecuteReader();
-                if (!reader.HasRows)
-                {
-                    await ctx.Channel.SendMessageAsync("Could not find any user at this position.").ConfigureAwait(false);
-                    reader.Close();
-                    await connection.CloseAsync();
-                    return;
-                }
-                else
-                {
-                    while (reader.Read())
-                    {
-                        discordID = reader.GetUInt64("DiscordID");
-                    }
-                    reader.Close();
-                    await connection.CloseAsync();
-
-                    query = "DELETE from pathQueuers WHERE queueChannelID = ?channelID " +
                          "AND GroupNumber = ?groupPosition AND PlaceInGroup = ?userPosition";
-                    command = new MySqlCommand(query, connection);
+                ulong discordID = 0;
+                bool returnEarly = false;
+                using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
+                {
+                    MySqlCommand command = new MySqlCommand(query, connection);
                     command.Parameters.Add("?channelID", MySqlDbType.VarChar, 40).Value = ctx.Channel.Id;
                     command.Parameters.Add("?groupPosition", MySqlDbType.Int32).Value = groupPos;
                     command.Parameters.Add("?userPosition", MySqlDbType.Int32).Value = result;
-                    await connection.OpenAsync();
-                    command.ExecuteNonQuery();
-                    await connection.CloseAsync();
-                    DiscordMember removedUser = await ctx.Guild.GetMemberAsync(discordID).ConfigureAwait(false);
-                    await ctx.Channel.SendMessageAsync($"Removed {removedUser.DisplayName} from your queue").ConfigureAwait(false);
+                    connection.Open();
+                    var reader = command.ExecuteReader();
+                    if (!reader.HasRows)
+                    {
+                        await ctx.Channel.SendMessageAsync("Could not find any user at this position.").ConfigureAwait(false);
+                        reader.Close();
+                        await connection.CloseAsync();
+                        returnEarly = true;
+                    }
+                    else
+                    {
+                        while (reader.Read())
+                        {
+                            discordID = reader.GetUInt64("DiscordID");
+                        }
+                        reader.Close();
+                    }
                 }
+
+                if (returnEarly)
+                {
+                    return;
+                }
+
+                using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
+                {
+                    query = "DELETE from pathQueuers WHERE queueChannelID = ?channelID " +
+                         "AND GroupNumber = ?groupPosition AND PlaceInGroup = ?userPosition";
+                    var command = new MySqlCommand(query, connection);
+                    command.Parameters.Add("?channelID", MySqlDbType.VarChar, 40).Value = ctx.Channel.Id;
+                    command.Parameters.Add("?groupPosition", MySqlDbType.Int32).Value = groupPos;
+                    command.Parameters.Add("?userPosition", MySqlDbType.Int32).Value = result;
+                    connection.Open();
+                    command.ExecuteNonQuery();
+                }
+                DiscordMember removedUser = await ctx.Guild.GetMemberAsync(discordID).ConfigureAwait(false);
+                await ctx.Channel.SendMessageAsync($"Removed {removedUser.DisplayName} from your queue").ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -763,65 +786,75 @@ namespace ThePathBot.Commands.QueueCommands
 
             try
             {
-                MySqlConnection connection = await GetDBConnectionAsync();
                 string query = "SELECT DiscordID from pathQueuers WHERE queueChannelID = ?channelID " +
-                    "AND GroupNumber = ?groupPosition AND PlaceInGroup = ?userPosition";
+                            "AND GroupNumber = ?groupPosition AND PlaceInGroup = ?userPosition";
                 ulong discordID = 0;
-                MySqlCommand command = new MySqlCommand(query, connection);
-                command.Parameters.Add("?channelID", MySqlDbType.VarChar, 40).Value = ctx.Channel.Id;
-                command.Parameters.Add("?groupPosition", MySqlDbType.Int32).Value = groupPosition;
-                command.Parameters.Add("?userPosition", MySqlDbType.Int32).Value = userPosition;
-                await connection.OpenAsync();
-                MySqlDataReader reader = command.ExecuteReader();
-                if (!reader.HasRows)
+                bool returnEarly = false;
+
+                using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
                 {
-                    var msg = await ctx.Channel.SendMessageAsync("Could not find any user at this position.").ConfigureAwait(false);
-                    reader.Close();
-                    await connection.CloseAsync();
-                    StartTimer(msg);
-                    return;
-                }
-                else
-                {
-                    while (reader.Read())
+                    MySqlCommand command = new MySqlCommand(query, connection);
+                    command.Parameters.Add("?channelID", MySqlDbType.VarChar, 40).Value = ctx.Channel.Id;
+                    command.Parameters.Add("?groupPosition", MySqlDbType.Int32).Value = groupPosition;
+                    command.Parameters.Add("?userPosition", MySqlDbType.Int32).Value = userPosition;
+                    connection.Open();
+                    MySqlDataReader reader = command.ExecuteReader();
+                    if (!reader.HasRows)
                     {
-                        discordID = reader.GetUInt64("DiscordID");
-                    }
-                    reader.Close();
-                    await connection.CloseAsync();
-
-                    string code = await GetCodeFromChannelId(ctx.Channel.Id);
-
-                    if (!await IsUserBannedFromQueue(code, discordID))
-                    {
-                        query = "Insert Into pathQueueBans (DiscordID, queueChannelID) values (?discordID, ?queueChannelID)";
-                        command = new MySqlCommand(query, connection);
-                        command.Parameters.Add("?discordID", MySqlDbType.VarChar, 40).Value = discordID;
-                        command.Parameters.Add("?queueChannelID", MySqlDbType.VarChar, 40).Value = ctx.Channel.Id;
-                        await connection.OpenAsync();
-                        await command.ExecuteNonQueryAsync();
-                        await connection.CloseAsync();
-
-                        query = "DELETE from pathQueuers WHERE queueChannelID = ?channelID " +
-                                "AND GroupNumber = ?groupPosition AND PlaceInGroup = ?userPosition";
-                        command = new MySqlCommand(query, connection);
-                        command.Parameters.Add("?channelID", MySqlDbType.VarChar, 40).Value = ctx.Channel.Id;
-                        command.Parameters.Add("?groupPosition", MySqlDbType.Int32).Value = groupPosition;
-                        command.Parameters.Add("?userPosition", MySqlDbType.Int32).Value = userPosition;
-                        await connection.OpenAsync();
-                        command.ExecuteNonQuery();
-                        await connection.CloseAsync();
-
-                        var bannedUser = await ctx.Guild.GetMemberAsync(discordID).ConfigureAwait(false);
-                        var msg = await ctx.Channel.SendMessageAsync($"{bannedUser.DisplayName} has been banned from your queue session").ConfigureAwait(false);
+                        var msg = await ctx.Channel.SendMessageAsync("Could not find any user at this position.").ConfigureAwait(false);
+                        reader.Close();
                         StartTimer(msg);
+                        returnEarly = true;
                     }
                     else
                     {
-                        var bannedUser = await ctx.Guild.GetMemberAsync(discordID).ConfigureAwait(false);
-                        var msg = await ctx.Channel.SendMessageAsync($"{bannedUser.DisplayName} is already banned from your queue").ConfigureAwait(false);
-                        StartTimer(msg);
+                        while (reader.Read())
+                        {
+                            discordID = reader.GetUInt64("DiscordID");
+                        }
+                        reader.Close();
                     }
+                }
+
+                if (returnEarly)
+                {
+                    return;
+                }
+
+                string code = GetCodeFromChannelId(ctx.Channel.Id);
+
+                if (!IsUserBannedFromQueue(code, discordID))
+                {
+                    using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
+                    {
+                        query = "Insert Into pathQueueBans (DiscordID, queueChannelID) values (?discordID, ?queueChannelID)";
+                        var command = new MySqlCommand(query, connection);
+                        command.Parameters.Add("?discordID", MySqlDbType.VarChar, 40).Value = discordID;
+                        command.Parameters.Add("?queueChannelID", MySqlDbType.VarChar, 40).Value = ctx.Channel.Id;
+                        connection.Open();
+                        command.ExecuteNonQuery();
+                    }
+
+                    using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync())) {
+                        query = "DELETE from pathQueuers WHERE queueChannelID = ?channelID " +
+                                "AND GroupNumber = ?groupPosition AND PlaceInGroup = ?userPosition";
+                        var command = new MySqlCommand(query, connection);
+                        command.Parameters.Add("?channelID", MySqlDbType.VarChar, 40).Value = ctx.Channel.Id;
+                        command.Parameters.Add("?groupPosition", MySqlDbType.Int32).Value = groupPosition;
+                        command.Parameters.Add("?userPosition", MySqlDbType.Int32).Value = userPosition;
+                        connection.Open();
+                        command.ExecuteNonQuery();
+                    }
+
+                    var bannedUser = await ctx.Guild.GetMemberAsync(discordID).ConfigureAwait(false);
+                    var msg = await ctx.Channel.SendMessageAsync($"{bannedUser.DisplayName} has been banned from your queue session").ConfigureAwait(false);
+                    StartTimer(msg);
+                }
+                else
+                {
+                    var bannedUser = await ctx.Guild.GetMemberAsync(discordID).ConfigureAwait(false);
+                    var msg = await ctx.Channel.SendMessageAsync($"{bannedUser.DisplayName} is already banned from your queue").ConfigureAwait(false);
+                    StartTimer(msg);
                 }
             }
             catch (Exception ex)
@@ -833,153 +866,131 @@ namespace ThePathBot.Commands.QueueCommands
             }
         }
 
-        private async Task<string> GetCodeFromChannelId(ulong channelId)
+        private string GetCodeFromChannelId(ulong channelId)
         {
             string code = "";
-            MySqlConnection connection = await GetDBConnectionAsync();
-            string query = "Select sessionCode from pathQueues where privateChannelID = ?channelID";
-            MySqlCommand command = new MySqlCommand(query, connection);
-            command.Parameters.Add("?channelID", MySqlDbType.VarChar, 40).Value = channelId;
-            await connection.OpenAsync();
-            var reader = command.ExecuteReader();
-            if (reader.HasRows)
+            using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
             {
-                while (reader.Read())
+                string query = "Select sessionCode from pathQueues where privateChannelID = ?channelID";
+                MySqlCommand command = new MySqlCommand(query, connection);
+                command.Parameters.Add("?channelID", MySqlDbType.VarChar, 40).Value = channelId;
+                connection.Open();
+                var reader = command.ExecuteReader();
+                if (reader.HasRows)
                 {
-                    code = reader.GetString("sessionCode");
+                    while (reader.Read())
+                    {
+                        code = reader.GetString("sessionCode");
+                    }
                 }
             }
-
             return code;
         }
 
-        private async Task<bool> IsUserBannedFromQueue(string code, ulong discordId)
+        private bool IsUserBannedFromQueue(string code, ulong discordId)
         {
-            ulong channelId = await GetPrivateChannelFromCode(code);
-            MySqlConnection connection = await GetDBConnectionAsync();
-            string query = "Select DiscordID from pathQueueBans Where DiscordID = ?discordID AND queueChannelID = ?channelId";
-            MySqlCommand command = new MySqlCommand(query, connection);
-            command.Parameters.Add("?discordID", MySqlDbType.VarChar, 40).Value = discordId;
-            command.Parameters.Add("?channelId", MySqlDbType.VarChar, 40).Value = channelId;
-            await connection.OpenAsync();
-            var reader = command.ExecuteReader();
-            bool isBanned = reader.HasRows;
-            reader.Close();
-            await connection.CloseAsync();
+            bool isBanned = false;
+            ulong channelId = GetPrivateChannelFromCode(code);
+            using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
+            {
+                string query = "Select DiscordID from pathQueueBans Where DiscordID = ?discordID AND queueChannelID = ?channelId";
+                MySqlCommand command = new MySqlCommand(query, connection);
+                command.Parameters.Add("?discordID", MySqlDbType.VarChar, 40).Value = discordId;
+                command.Parameters.Add("?channelId", MySqlDbType.VarChar, 40).Value = channelId;
+                connection.Open();
+                var reader = command.ExecuteReader();
+                isBanned = reader.HasRows;
+            }
 
             return isBanned;
         }
 
-        private async Task<int> GetMaxVisitorsAtOnceFromCode(string code)
+        private int GetMaxVisitorsAtOnceFromCode(string code)
         {
-            MySqlConnection connection = await GetDBConnectionAsync();
-            string query = "SELECT maxVisitorsAtOnce from pathQueues WHERE sessionCode = ?sessionCode";
-            MySqlCommand command = new MySqlCommand(query, connection);
-            command.Parameters.Add("?sessionCode", MySqlDbType.VarChar, 5).Value = code.ToUpper();
-
-            int queueChannelId = 0;
-
-            connection.Open();
-            var reader = command.ExecuteReader();
-            if (reader.HasRows)
+            int maxVisitors = 0;
+            using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
             {
-                while (reader.Read())
+                string query = "SELECT maxVisitorsAtOnce from pathQueues WHERE sessionCode = ?sessionCode";
+                MySqlCommand command = new MySqlCommand(query, connection);
+                command.Parameters.Add("?sessionCode", MySqlDbType.VarChar, 5).Value = code.ToUpper();
+                connection.Open();
+                var reader = command.ExecuteReader();
+                if (reader.HasRows)
                 {
-                    queueChannelId = reader.GetInt32("maxVisitorsAtOnce");
+                    while (reader.Read())
+                    {
+                        maxVisitors = reader.GetInt32("maxVisitorsAtOnce");
+                    }
                 }
-                return queueChannelId;
             }
-            else
-            {
-                return 0;
-            }
+            return maxVisitors;
         }
 
-        private async Task<bool> CheckIfUserInQueue(ulong userid, ulong channelid)
+        private bool CheckIfUserInQueue(ulong userid, ulong channelid)
         {
-            MySqlConnection connection = await GetDBConnectionAsync();
-            string query = "SELECT * from pathQueuers WHERE DiscordID = ?userid AND queueChannelID = ?channelid " +
-                "AND visited = 0 AND onisland = 0";
-            MySqlCommand command = new MySqlCommand(query, connection);
-            command.Parameters.Add("?userid", MySqlDbType.VarChar, 40).Value = userid;
-            command.Parameters.Add("?channelid", MySqlDbType.VarChar, 40).Value = channelid;
-            await connection.OpenAsync();
-            var reader = await command.ExecuteReaderAsync();
-            bool inQueue = reader.HasRows;
-            reader.Close();
-            await connection.CloseAsync();
+            bool inQueue = false;
+            using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
+            {
+                string query = "SELECT * from pathQueuers WHERE DiscordID = ?userid AND queueChannelID = ?channelid " +
+                    "AND visited = 0 AND onisland = 0";
+                MySqlCommand command = new MySqlCommand(query, connection);
+                command.Parameters.Add("?userid", MySqlDbType.VarChar, 40).Value = userid;
+                command.Parameters.Add("?channelid", MySqlDbType.VarChar, 40).Value = channelid;
+                connection.Open();
+                var reader = command.ExecuteReader();
+                inQueue = reader.HasRows;
+                reader.Close();
+            }
 
             return inQueue;
         }
 
-        private async Task<ulong> GetPrivateChannelFromCode(string code)
+        private ulong GetPrivateChannelFromCode(string code)
         {
-            return await GetPrivateChannelFromCode(code, true);
+            return GetPrivateChannelFromCode(code, true);
         }
 
-        private async Task<ulong> GetPrivateChannelFromCode(string code, bool active)
+        private ulong GetPrivateChannelFromCode(string code, bool active)
         {
-            MySqlConnection connection = await GetDBConnectionAsync();
-            string query = "SELECT privateChannelID from pathQueues WHERE sessionCode = ?sessionCode AND active = ?active";
-            MySqlCommand command = new MySqlCommand(query, connection);
-            command.Parameters.Add("?sessionCode", MySqlDbType.VarChar, 5).Value = code.ToUpper();
-            command.Parameters.Add("?active", MySqlDbType.VarChar).Value = active == true ? 1 : 0;
             ulong queueChannelId = 0;
-
-            connection.Open();
-            var reader = command.ExecuteReader();
-            if (reader.HasRows)
+            using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
             {
-                while (reader.Read())
+                string query = "SELECT privateChannelID from pathQueues WHERE sessionCode = ?sessionCode AND active = ?active";
+                MySqlCommand command = new MySqlCommand(query, connection);
+                command.Parameters.Add("?sessionCode", MySqlDbType.VarChar, 5).Value = code.ToUpper();
+                command.Parameters.Add("?active", MySqlDbType.VarChar).Value = active == true ? 1 : 0;
+                connection.Open();
+                var reader = command.ExecuteReader();
+                if (reader.HasRows)
                 {
-                    queueChannelId = reader.GetUInt64("privateChannelID");
+                    while (reader.Read())
+                    {
+                        queueChannelId = reader.GetUInt64("privateChannelID");
+                    }
                 }
-                return queueChannelId;
             }
-            else
-            {
-                return 0;
-            }
+            return queueChannelId;
         }
 
         private async void CreateQueueEmbed(string turnipPrice, CommandContext ctx, DiscordChannel channel, string attachment,
             string maxSize, string dodoCode, string message, bool isDaisy)
         {
-            string sessionCode = new AlphaNumericStringGenerator().GetRandomUppercaseAlphaNumericValue(5);
-            string embedTitle = isDaisy ? $"Daisy selling turnips for {turnipPrice}" : $"Nooks buying turnips for {turnipPrice}";
-            var queueEmbed = new DiscordEmbedBuilder
-            {
-                Title = embedTitle,
-                ImageUrl = attachment,
-                Description = $"To join type ```?join {sessionCode}```"
-            };
-            ulong postChannelId = isDaisy ? daisyMaeChannel : turnipPostChannel;
-            var postChannel = ctx.Guild.GetChannel(postChannelId);
-            var queueMsg = await postChannel.SendMessageAsync(embed: queueEmbed).ConfigureAwait(false);
-
-            await InsertQueueIntoDBAsync(ctx.User.Id, queueMsg.Id, channel.Id, int.Parse(maxSize), dodoCode, sessionCode, message, isDaisy);
-        }
-
-        private async Task InsertQueueIntoDBAsync(
-            ulong queueOwner, ulong queueMessageID, ulong privateChannel, int maxVisitors, string dodoCode, string sessionCode, string message, bool isDaisy)
-        {
             try
             {
-                MySqlConnection connection = await GetDBConnectionAsync();
-                string query = "INSERT INTO pathQueues (queueOwner, queueMessageID, privateChannelID, maxVisitorsAtOnce, dodoCode, sessionCode, message, daisy) " +
-                    "VALUES (?queueOwner, ?queueMessage, ?privateChannel, ?maxVisitors, ?dodoCode, ?sessionCode, ?message, ?daisy)";
-                MySqlCommand command = new MySqlCommand(query, connection);
-                command.Parameters.Add("?queueOwner", MySqlDbType.VarChar, 40).Value = queueOwner.ToString();
-                command.Parameters.Add("?queueMessage", MySqlDbType.VarChar, 40).Value = queueMessageID.ToString();
-                command.Parameters.Add("?privateChannel", MySqlDbType.VarChar, 40).Value = privateChannel.ToString();
-                command.Parameters.Add("?maxVisitors", MySqlDbType.Int32).Value = maxVisitors;
-                command.Parameters.Add("?dodoCode", MySqlDbType.VarChar, 5).Value = dodoCode;
-                command.Parameters.Add("?sessionCode", MySqlDbType.VarChar, 5).Value = sessionCode;
-                command.Parameters.Add("?message", MySqlDbType.VarChar, 2550).Value = message;
-                command.Parameters.Add("?daisy", MySqlDbType.Int16).Value = isDaisy;
-                connection.Open();
-                command.ExecuteNonQuery();
-                connection.Close();
+                string sessionCode = new AlphaNumericStringGenerator().GetRandomUppercaseAlphaNumericValue(5);
+                string embedTitle = isDaisy ? $"Daisy selling turnips for {turnipPrice}" : $"Nooks buying turnips for {turnipPrice}";
+                var queueEmbed = new DiscordEmbedBuilder
+                {
+                    Title = embedTitle,
+                    ImageUrl = attachment,
+                    Description = $"To join type ```?join {sessionCode}```"
+                };
+                ulong postChannelId = isDaisy ? daisyMaeChannel : turnipPostChannel;
+                var postChannel = ctx.Guild.GetChannel(postChannelId);
+                var queueMsg = await postChannel.SendMessageAsync(embed: queueEmbed).ConfigureAwait(false);
+
+                InsertQueueIntoDBAsync(ctx.User.Id, queueMsg.Id, channel.Id, int.Parse(maxSize), dodoCode, sessionCode, message, isDaisy);
+
             }
             catch (Exception ex)
             {
@@ -988,60 +999,103 @@ namespace ThePathBot.Commands.QueueCommands
             }
         }
 
-        private async Task MakeQueueInactive(ulong queueMessageID)
+        private void InsertQueueIntoDBAsync(
+            ulong queueOwner, ulong queueMessageID, ulong privateChannel, int maxVisitors, string dodoCode, string sessionCode, string message, bool isDaisy)
         {
-            MySqlConnection connection = await GetDBConnectionAsync();
-            string query = "UPDATE pathQueues SET active = 0 WHERE queueMessageID = ?queueMessage";
-            MySqlCommand command = new MySqlCommand(query, connection);
-            command.Parameters.Add("?queueMessage", MySqlDbType.VarChar, 40).Value = queueMessageID.ToString();
-            connection.Open();
-            command.ExecuteNonQuery();
-            connection.Close();
+            try
+            {
+                using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
+                {
+                    string query = "INSERT INTO pathQueues (queueOwner, queueMessageID, privateChannelID, maxVisitorsAtOnce, dodoCode, sessionCode, message, daisy) " +
+                        "VALUES (?queueOwner, ?queueMessage, ?privateChannel, ?maxVisitors, ?dodoCode, ?sessionCode, ?message, ?daisy)";
+                    MySqlCommand command = new MySqlCommand(query, connection);
+                    command.Parameters.Add("?queueOwner", MySqlDbType.VarChar, 40).Value = queueOwner.ToString();
+                    command.Parameters.Add("?queueMessage", MySqlDbType.VarChar, 40).Value = queueMessageID.ToString();
+                    command.Parameters.Add("?privateChannel", MySqlDbType.VarChar, 40).Value = privateChannel.ToString();
+                    command.Parameters.Add("?maxVisitors", MySqlDbType.Int32).Value = maxVisitors;
+                    command.Parameters.Add("?dodoCode", MySqlDbType.VarChar, 5).Value = dodoCode;
+                    command.Parameters.Add("?sessionCode", MySqlDbType.VarChar, 5).Value = sessionCode;
+                    command.Parameters.Add("?message", MySqlDbType.VarChar, 2550).Value = message;
+                    command.Parameters.Add("?daisy", MySqlDbType.Int16).Value = isDaisy;
+                    connection.Open();
+                    command.ExecuteNonQuery();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.Out.WriteLine(ex.Message);
+                Console.Out.WriteLine(ex.StackTrace);
+            }
         }
 
-        private async Task AddMemberToQueue(ulong discordID, ulong queueChannelID, string sessionCode)
+        private void MakeQueueInactive(ulong queueMessageID)
         {
-            int maxVisitorsInGroup = await GetMaxVisitorsAtOnceFromCode(sessionCode);
-            (int, int) groupInfoNumebrs = await GetGroupNumber(queueChannelID, maxVisitorsInGroup);
-            MySqlConnection connection = await GetDBConnectionAsync();
-            string query = "INSERT INTO pathQueuers (DiscordID, queueChannelID, GroupNumber, PlaceInGroup) " +
-                "VALUES (?discordID, ?queueChannelID, ?groupNumber, ?placeInGroup)";
-            MySqlCommand command = new MySqlCommand(query, connection);
-            command.Parameters.Add("?discordID", MySqlDbType.VarChar, 40).Value = discordID.ToString();
-            command.Parameters.Add("?queueChannelID", MySqlDbType.VarChar, 40).Value = queueChannelID.ToString();
-            command.Parameters.Add("?groupNumber", MySqlDbType.Int32).Value = groupInfoNumebrs.Item1;
-            command.Parameters.Add("?placeInGroup", MySqlDbType.Int32).Value = groupInfoNumebrs.Item2;
-            connection.Open();
-            command.ExecuteNonQuery();
-            connection.Close();
+            try
+            {
+                using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
+                {
+                    string query = "UPDATE pathQueues SET active = 0 WHERE queueMessageID = ?queueMessage";
+                    MySqlCommand command = new MySqlCommand(query, connection);
+                    command.Parameters.Add("?queueMessage", MySqlDbType.VarChar, 40).Value = queueMessageID.ToString();
+                    connection.Open();
+                    command.ExecuteNonQuery();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.Out.WriteLine(ex.Message);
+                Console.Out.WriteLine(ex.StackTrace);
+            }
         }
 
-        private async Task<(int, int)> GetGroupNumber(ulong queueChannelID, int maxInGroup)
+        private void AddMemberToQueue(ulong discordID, ulong queueChannelID, string sessionCode)
+        {
+            int maxVisitorsInGroup = GetMaxVisitorsAtOnceFromCode(sessionCode);
+            (int, int) groupInfoNumebrs = GetGroupNumber(queueChannelID, maxVisitorsInGroup);
+
+            using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
+            {
+                string query = "INSERT INTO pathQueuers (DiscordID, queueChannelID, GroupNumber, PlaceInGroup) " +
+                    "VALUES (?discordID, ?queueChannelID, ?groupNumber, ?placeInGroup)";
+                MySqlCommand command = new MySqlCommand(query, connection);
+                command.Parameters.Add("?discordID", MySqlDbType.VarChar, 40).Value = discordID.ToString();
+                command.Parameters.Add("?queueChannelID", MySqlDbType.VarChar, 40).Value = queueChannelID.ToString();
+                command.Parameters.Add("?groupNumber", MySqlDbType.Int32).Value = groupInfoNumebrs.Item1;
+                command.Parameters.Add("?placeInGroup", MySqlDbType.Int32).Value = groupInfoNumebrs.Item2;
+                connection.Open();
+                command.ExecuteNonQuery();
+            }
+        }
+
+        private (int, int) GetGroupNumber(ulong queueChannelID, int maxInGroup)
         {
             int groupNumber = 1;
             int positionInGroup = 1;
-            MySqlConnection connection = await GetDBConnectionAsync();
-            string query = "SELECT * FROM pathQueuers WHERE queueChannelID = ?queueChannelID AND visited = 0 " +
-                "ORDER BY GroupNumber DESC, PlaceInGroup DESC, TimeJoined DESC LIMIT 1";
-            MySqlCommand command = new MySqlCommand(query, connection);
-            command.Parameters.Add("?queueChannelID", MySqlDbType.VarChar, 40).Value = queueChannelID;
-            await connection.OpenAsync();
-            MySqlDataReader reader = command.ExecuteReader();
-
-            if (reader.HasRows)
+            bool firstPerson = false;
+            using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
             {
-                while (reader.Read())
+                string query = "SELECT * FROM pathQueuers WHERE queueChannelID = ?queueChannelID AND visited = 0 " +
+                    "ORDER BY GroupNumber DESC, PlaceInGroup DESC, TimeJoined DESC LIMIT 1";
+                MySqlCommand command = new MySqlCommand(query, connection);
+                command.Parameters.Add("?queueChannelID", MySqlDbType.VarChar, 40).Value = queueChannelID;
+                connection.Open();
+                MySqlDataReader reader = command.ExecuteReader();
+
+                if (reader.HasRows)
                 {
-                    groupNumber = reader.GetInt32("GroupNumber");
-                    positionInGroup = reader.GetInt32("PlaceInGroup");
+                    while (reader.Read())
+                    {
+                        groupNumber = reader.GetInt32("GroupNumber");
+                        positionInGroup = reader.GetInt32("PlaceInGroup");
+                    }
                 }
+                reader.Close();
             }
-            else
+
+            if (firstPerson)
             {
                 return (groupNumber, positionInGroup);
             }
-            reader.Close();
-            await connection.CloseAsync();
 
             if (positionInGroup >= maxInGroup)
             {
@@ -1053,28 +1107,6 @@ namespace ThePathBot.Commands.QueueCommands
                 positionInGroup++;
             }
             return (groupNumber, positionInGroup);
-        }
-
-        private async Task<MySqlConnection> GetDBConnectionAsync()
-        {
-            DBConnection dbCon = DBConnection.Instance();
-            string json = string.Empty;
-
-            using (FileStream fs =
-                File.OpenRead(configFilePath + "/config.json")
-            )
-            using (StreamReader sr = new StreamReader(fs, new UTF8Encoding(false)))
-            {
-                json = await sr.ReadToEndAsync().ConfigureAwait(false);
-            }
-
-            ConfigJson configJson = JsonConvert.DeserializeObject<ConfigJson>(json);
-            dbCon.DatabaseName = configJson.databaseName;
-            dbCon.Password = configJson.databasePassword;
-            dbCon.databaseUser = configJson.databaseUser;
-            dbCon.databasePort = configJson.databasePort;
-            MySqlConnection connection = new MySqlConnection(dbCon.connectionString);
-            return connection;
         }
     }
 }
