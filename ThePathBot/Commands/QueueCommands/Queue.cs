@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Timers;
+using DSharpPlus;
 using DSharpPlus.CommandsNext;
 using DSharpPlus.CommandsNext.Attributes;
 using DSharpPlus.Entities;
@@ -60,164 +61,172 @@ namespace ThePathBot.Commands.QueueCommands
         [Description("Create queue")]
         public async Task CreateQueue(CommandContext ctx)
         {
-            if (ctx.Guild.Id == 694013861560320081)
+            try
             {
-                var embed = new DiscordEmbedBuilder
+                if (ctx.Guild.Id == 694013861560320081)
                 {
-                    Title = "Wuh-oh!",
-                    Description = "Sorry... This command cannot be run in this server.",
-                    Color = DiscordColor.Blurple
-                };
-                await ctx.Channel.SendMessageAsync(embed: embed).ConfigureAwait(false);
-                return;
-            }
-            //first we must create a private channel
-            Guid guid = Guid.NewGuid();
-            var newChannel = await ctx.Guild.CreateChannelAsync(guid.ToString(), DSharpPlus.ChannelType.Text, ctx.Guild.GetChannel(privateChannelGroup));
-            //Then give the user access to the channel
-            await newChannel.AddOverwriteAsync(ctx.Member, DSharpPlus.Permissions.AccessChannels);
+                    var embed = new DiscordEmbedBuilder
+                    {
+                        Title = "Wuh-oh!",
+                        Description = "Sorry... This command cannot be run in this server.",
+                        Color = DiscordColor.Blurple
+                    };
+                    await ctx.Channel.SendMessageAsync(embed: embed).ConfigureAwait(false);
+                    return;
+                }
+                //first we must create a private channel
+                Guid guid = Guid.NewGuid();
+                var newChannel = await ctx.Guild.CreateChannelAsync(guid.ToString(), DSharpPlus.ChannelType.Text, ctx.Guild.GetChannel(privateChannelGroup));
+                //Then give the user access to the channel
+                await newChannel.AddOverwriteAsync(ctx.Member, DSharpPlus.Permissions.AccessChannels);
 
-            // Now we can get some information
-            bool ready = false;
-            var interactivity = ctx.Client.GetInteractivity();
-            DiscordEmoji yes = DiscordEmoji.FromName(ctx.Client, ":white_check_mark:");
-            DiscordEmoji no = DiscordEmoji.FromName(ctx.Client, ":x:");
-            // nooks :70xTimmy:
-            // Daisy :70zdaisymae:
-            DiscordEmoji daisy = DiscordEmoji.FromName(ctx.Client, ":70zdaisymae:");
-            DiscordEmoji nooks = DiscordEmoji.FromName(ctx.Client, ":70xTimmy:");
-            string turnipPrice = "0";
-            string attachment = "";
-            string maxGroupSize = "0";
-            string dodoCode = "";
-            string message = "Welcome";
-            bool isDaisy = false;
-            while (!ready)
+                // Now we can get some information
+                bool ready = false;
+                var interactivity = ctx.Client.GetInteractivity();
+                DiscordEmoji yes = DiscordEmoji.FromName(ctx.Client, ":white_check_mark:");
+                DiscordEmoji no = DiscordEmoji.FromName(ctx.Client, ":x:");
+                // nooks :70xTimmy:
+                // Daisy :70zdaisymae:
+                DiscordEmoji daisy = DiscordEmoji.FromName(ctx.Client, ":70zdaisymae:");
+                DiscordEmoji nooks = DiscordEmoji.FromName(ctx.Client, ":70xTimmy:");
+                string turnipPrice = "0";
+                string attachment = "";
+                string maxGroupSize = "0";
+                string dodoCode = "";
+                string message = "Welcome";
+                bool isDaisy = false;
+                while (!ready)
+                {
+                    var daisyNooksMessage = await newChannel.SendMessageAsync($"React {daisy} for daisy session or {nooks} for turnip session").ConfigureAwait(false);
+                    await daisyNooksMessage.CreateReactionAsync(daisy).ConfigureAwait(false);
+                    await daisyNooksMessage.CreateReactionAsync(nooks).ConfigureAwait(false);
+
+                    var daisyOrNooks = await interactivity.WaitForReactionAsync(react => (react.Emoji == daisy ||
+                    react.Emoji == nooks) && react.User == ctx.User, TimeSpan.FromMinutes(2)).ConfigureAwait(false);
+                    isDaisy = daisyOrNooks.Result.Emoji == daisy;
+
+                    bool responseCorrect = true;
+                    await newChannel.SendMessageAsync("Enter your Dodo Code").ConfigureAwait(false);
+
+                    var msg = await interactivity.WaitForMessageAsync(x => x.Channel == newChannel && x.Author == ctx.Member).ConfigureAwait(false);
+
+                    dodoCode = msg.Result.Content;
+                    if (msg.Result.Content.ToLower() == "cancel")
+                    {
+                        await newChannel.DeleteAsync();
+                        return;
+                    }
+                    if (dodoCode.Length != 5)
+                    {
+                        await newChannel.SendMessageAsync("This is not a valid dodo code").ConfigureAwait(false);
+                        responseCorrect = false;
+                    }
+
+                    await newChannel.SendMessageAsync("Enter your price").ConfigureAwait(false);
+
+                    msg = await interactivity.WaitForMessageAsync(x => x.Channel == newChannel && x.Author == ctx.Member).ConfigureAwait(false);
+
+                    turnipPrice = msg.Result.Content;
+
+                    if (msg.Result.Content.ToLower() == "cancel")
+                    {
+                        await newChannel.DeleteAsync();
+                        return;
+                    }
+                    if (!int.TryParse(turnipPrice, out int price))
+                    {
+                        await newChannel.SendMessageAsync("This is not a valid price").ConfigureAwait(false);
+                        responseCorrect = false;
+                    }
+
+                    await newChannel.SendMessageAsync("Enter session message for your guests").ConfigureAwait(false);
+
+                    msg = await interactivity.WaitForMessageAsync(x => x.Channel == newChannel && x.Author == ctx.Member).ConfigureAwait(false);
+
+                    if (msg.Result.Content.ToLower() == "cancel")
+                    {
+                        await newChannel.DeleteAsync();
+                        return;
+                    }
+                    message = msg.Result.Content;
+
+                    await newChannel.SendMessageAsync("Enter how many people you want per group (max of 7)").ConfigureAwait(false);
+
+                    msg = await interactivity.WaitForMessageAsync(x => x.Channel == newChannel && x.Author == ctx.Member).ConfigureAwait(false);
+
+                    maxGroupSize = msg.Result.Content;
+
+                    if (msg.Result.Content.ToLower() == "cancel")
+                    {
+                        await newChannel.DeleteAsync();
+                        return;
+                    }
+                    if (!int.TryParse(maxGroupSize, out int groupSize) || groupSize > 7 || groupSize < 1)
+                    {
+                        await newChannel.SendMessageAsync("This is not a valid group size").ConfigureAwait(false);
+                        responseCorrect = false;
+                    }
+
+                    await newChannel.SendMessageAsync("Please send a photo of your price").ConfigureAwait(false);
+
+                    var attachmentMsg = await interactivity.WaitForMessageAsync(x => x.Channel == newChannel && x.Author == ctx.Member && x.Attachments.Count > 0).ConfigureAwait(false);
+
+                    attachment = attachmentMsg.Result.Attachments[0].Url;
+
+                    var embed = new DiscordEmbedBuilder
+                    {
+                        Title = "Turnip Session",
+                        Thumbnail = new DiscordEmbedBuilder.EmbedThumbnail
+                        {
+                            Url = attachment
+                        }
+                    };
+
+                    StringBuilder sb = new StringBuilder();
+                    sb.AppendLine($"Dodo Code: {dodoCode}");
+                    if (isDaisy)
+                    {
+                        sb.AppendLine($"Daisy Price: {turnipPrice}");
+                    }
+                    else
+                    {
+                        sb.AppendLine($"Turnip Price: {turnipPrice}");
+                    }
+                    sb.AppendLine($"Session Message: {message}");
+                    sb.AppendLine($"Group Size: {maxGroupSize}");
+                    sb.AppendLine($"If this information is correct press the :white_check_mark: otherwise press :x: to start again.");
+
+
+                    embed.Description = sb.ToString();
+                    if (responseCorrect)
+                    {
+                        var sentMessage = await newChannel.SendMessageAsync(embed: embed).ConfigureAwait(false);
+
+                        await sentMessage.CreateReactionAsync(yes).ConfigureAwait(false);
+                        await sentMessage.CreateReactionAsync(no).ConfigureAwait(false);
+
+                        var response = await interactivity.WaitForReactionAsync(xe => xe.Emoji == yes || xe.Emoji == no,
+                            sentMessage, ctx.User, TimeSpan.FromMinutes(1)).ConfigureAwait(false);
+
+                        if (response.Result.Emoji == yes)
+                        {
+                            ready = true;
+                        }
+                    }
+                    else
+                    {
+                        await newChannel.SendMessageAsync("Parts of your response was incorrect please try again").ConfigureAwait(false);
+                    }
+                }
+                var dodoMsg = await newChannel.SendMessageAsync(embed: sessionEmbed).ConfigureAwait(false);
+
+                CreateQueueEmbed(turnipPrice, ctx, newChannel, attachment, maxGroupSize, dodoCode, message, isDaisy);
+            }
+            catch (Exception ex)
             {
-                var daisyNooksMessage = await newChannel.SendMessageAsync($"React {daisy} for daisy session or {nooks} for turnip session").ConfigureAwait(false);
-                await daisyNooksMessage.CreateReactionAsync(daisy).ConfigureAwait(false);
-                await daisyNooksMessage.CreateReactionAsync(nooks).ConfigureAwait(false);
-
-                var daisyOrNooks = await interactivity.WaitForReactionAsync(react => (react.Emoji == daisy ||
-                react.Emoji == nooks) && react.User == ctx.User, TimeSpan.FromMinutes(2)).ConfigureAwait(false);
-                isDaisy = daisyOrNooks.Result.Emoji == daisy;
-
-                bool responseCorrect = true;
-                await newChannel.SendMessageAsync("Enter your Dodo Code").ConfigureAwait(false);
-
-                var msg = await interactivity.WaitForMessageAsync(x => x.Channel == newChannel && x.Author == ctx.Member).ConfigureAwait(false);
-
-                dodoCode = msg.Result.Content;
-                if (msg.Result.Content.ToLower() == "cancel")
-                {
-                    await newChannel.DeleteAsync();
-                    return;
-                }
-                if (dodoCode.Length != 5)
-                {
-                    await newChannel.SendMessageAsync("This is not a valid dodo code").ConfigureAwait(false);
-                    responseCorrect = false;
-                }
-
-                await newChannel.SendMessageAsync("Enter your price").ConfigureAwait(false);
-
-                msg = await interactivity.WaitForMessageAsync(x => x.Channel == newChannel && x.Author == ctx.Member).ConfigureAwait(false);
-
-                turnipPrice = msg.Result.Content;
-
-                if (msg.Result.Content.ToLower() == "cancel")
-                {
-                    await newChannel.DeleteAsync();
-                    return;
-                }
-                if (!int.TryParse(turnipPrice, out int price))
-                {
-                    await newChannel.SendMessageAsync("This is not a valid price").ConfigureAwait(false);
-                    responseCorrect = false;
-                }
-
-                await newChannel.SendMessageAsync("Enter session message for your guests").ConfigureAwait(false);
-
-                msg = await interactivity.WaitForMessageAsync(x => x.Channel == newChannel && x.Author == ctx.Member).ConfigureAwait(false);
-
-                if (msg.Result.Content.ToLower() == "cancel")
-                {
-                    await newChannel.DeleteAsync();
-                    return;
-                }
-                message = msg.Result.Content;
-
-                await newChannel.SendMessageAsync("Enter how many people you want per group (max of 7)").ConfigureAwait(false);
-
-                msg = await interactivity.WaitForMessageAsync(x => x.Channel == newChannel && x.Author == ctx.Member).ConfigureAwait(false);
-
-                maxGroupSize = msg.Result.Content;
-
-                if (msg.Result.Content.ToLower() == "cancel")
-                {
-                    await newChannel.DeleteAsync();
-                    return;
-                }
-                if (!int.TryParse(maxGroupSize, out int groupSize) || groupSize > 7 || groupSize < 1)
-                {
-                    await newChannel.SendMessageAsync("This is not a valid group size").ConfigureAwait(false);
-                    responseCorrect = false;
-                }
-
-                await newChannel.SendMessageAsync("Please send a photo of your price").ConfigureAwait(false);
-
-                var attachmentMsg = await interactivity.WaitForMessageAsync(x => x.Channel == newChannel && x.Author == ctx.Member && x.Attachments.Count > 0).ConfigureAwait(false);
-
-                attachment = attachmentMsg.Result.Attachments[0].Url;
-
-                var embed = new DiscordEmbedBuilder
-                {
-                    Title = "Turnip Session",
-                    Thumbnail = new DiscordEmbedBuilder.EmbedThumbnail
-                    {
-                        Url = attachment
-                    }
-                };
-
-                StringBuilder sb = new StringBuilder();
-                sb.AppendLine($"Dodo Code: {dodoCode}");
-                if (isDaisy)
-                {
-                    sb.AppendLine($"Daisy Price: {turnipPrice}");
-                }
-                else
-                {
-                    sb.AppendLine($"Turnip Price: {turnipPrice}");
-                }
-                sb.AppendLine($"Session Message: {message}");
-                sb.AppendLine($"Group Size: {maxGroupSize}");
-                sb.AppendLine($"If this information is correct press the :white_check_mark: otherwise press :x: to start again.");
-
-
-                embed.Description = sb.ToString();
-                if (responseCorrect)
-                {
-                    var sentMessage = await newChannel.SendMessageAsync(embed: embed).ConfigureAwait(false);
-
-                    await sentMessage.CreateReactionAsync(yes).ConfigureAwait(false);
-                    await sentMessage.CreateReactionAsync(no).ConfigureAwait(false);
-
-                    var response = await interactivity.WaitForReactionAsync(xe => xe.Emoji == yes || xe.Emoji == no,
-                        sentMessage, ctx.User, TimeSpan.FromMinutes(1)).ConfigureAwait(false);
-
-                    if (response.Result.Emoji == yes)
-                    {
-                        ready = true;
-                    }
-                }
-                else
-                {
-                    await newChannel.SendMessageAsync("Parts of your response was incorrect please try again").ConfigureAwait(false);
-                }
+                Console.Out.WriteLine(ex.Message);
+                Console.Out.WriteLine(ex.StackTrace);
             }
-            var dodoMsg = await newChannel.SendMessageAsync(embed: sessionEmbed).ConfigureAwait(false);
-
-            CreateQueueEmbed(turnipPrice, ctx, newChannel, attachment, maxGroupSize, dodoCode, message, isDaisy);
         }
 
         [Command("showqueue")]
@@ -553,6 +562,8 @@ namespace ThePathBot.Commands.QueueCommands
                     };
                     embed.AddField("Dodo Code", dodo);
                     embed.AddField("Message From host", message);
+                    embed.AddField("Tip", $"Don't forget to tip the host by using the" +
+                        $" {Formatter.InlineCode("?tip")} command in {Formatter.Bold("path-bot-commands")} channel.");
 
                     await dmChannel.SendMessageAsync(embed: embed).ConfigureAwait(false);
                 }
@@ -983,7 +994,11 @@ namespace ThePathBot.Commands.QueueCommands
                 {
                     Title = embedTitle,
                     ImageUrl = attachment,
-                    Description = $"To join type ```?join {sessionCode}```"
+                    Description = $"To join type ```?join {sessionCode}```",
+                    Footer = new DiscordEmbedBuilder.EmbedFooter
+                    {
+                        Text = $"Hosted by {ctx.Member.DisplayName}"
+                    }
                 };
                 ulong postChannelId = isDaisy ? daisyMaeChannel : turnipPostChannel;
                 var postChannel = ctx.Guild.GetChannel(postChannelId);
