@@ -82,6 +82,10 @@ namespace ThePathBot.Listeners
                 {
                     embed.AddField("Message", $"Could not find any relevant content in this message", false);
                 }
+                else
+                {
+                    embed.ImageUrl = originalMessage.Attachments[0].Url;
+                }
             }
             else
             {
