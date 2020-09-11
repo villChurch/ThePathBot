@@ -221,11 +221,10 @@ namespace ThePathBot.Commands.QueueCommands
                 var dodoMsg = await newChannel.SendMessageAsync(embed: sessionEmbed).ConfigureAwait(false);
 
                 CreateQueueEmbed(turnipPrice, ctx, newChannel, attachment, maxGroupSize, dodoCode, message, isDaisy);
-
-                DiscordRole turnipRole; //753724832423870577
-
-                if (ctx.Guild.Id == 744699540212416592)
+                int.TryParse(turnipPrice, out int price);
+                if (ctx.Guild.Id == 744699540212416592 && price >= 500)
                 {
+                    DiscordRole turnipRole; //753724832423870577
                     turnipRole = ctx.Guild.GetRole(753724832423870577);
                     var turnipChannel = ctx.Guild.GetChannel(turnipPostChannel);
                     var turnipRoleEmbed = new DiscordEmbedBuilder
