@@ -221,6 +221,23 @@ namespace ThePathBot.Commands.QueueCommands
                 var dodoMsg = await newChannel.SendMessageAsync(embed: sessionEmbed).ConfigureAwait(false);
 
                 CreateQueueEmbed(turnipPrice, ctx, newChannel, attachment, maxGroupSize, dodoCode, message, isDaisy);
+
+                DiscordRole turnipRole; //753724832423870577
+
+                if (ctx.Guild.Id == 744699540212416592)
+                {
+                    turnipRole = ctx.Guild.GetRole(753724832423870577);
+                    var turnipChannel = ctx.Guild.GetChannel(turnipPostChannel);
+                    var turnipRoleEmbed = new DiscordEmbedBuilder
+                    {
+                        Title = $"High turnip price at nooks",
+                        Description = $"{Formatter.Mention(turnipRole)} {Formatter.Mention(ctx.User, true)} is hosting a high price of" +
+                        $" {turnipPrice}. See {Formatter.Mention(turnipChannel)} for information on how to join.",
+                        Color = DiscordColor.Aquamarine
+                    };
+                    var loungeChannel = ctx.Guild.GetChannel(744731248416784545);
+                    await loungeChannel.SendMessageAsync(embed: turnipRoleEmbed).ConfigureAwait(false);
+                }
             }
             catch (Exception ex)
             {
