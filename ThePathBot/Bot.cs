@@ -29,6 +29,7 @@ namespace ThePathBot
         private ulong LastCountId { get; set; }
         private readonly ulong daisymaeChannelId = 744733207148232845;
         private readonly ulong nookShopChannelId = 744733259748999270; // test channel 746852898465644544;
+        private readonly ulong codeShareChannelId = 744751909805752330;
         private readonly DBConnectionUtils dBConnectionUtils = new DBConnectionUtils();
 
         //private static readonly DateTime UnixEpoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
@@ -156,11 +157,7 @@ namespace ThePathBot
 
         private async Task Client_MessageCreated(MessageCreateEventArgs e)
         {
-            //if (e.Channel.IsPrivate && !e.Author.IsBot)
-            //{
-            //    await e.Channel.SendMessageAsync("Hello").ConfigureAwait(false);
-            //}
-            if (e.Channel.Id == daisymaeChannelId || e.Channel.Id == nookShopChannelId)
+            if (e.Channel.Id == daisymaeChannelId || e.Channel.Id == nookShopChannelId || e.Channel.Id == codeShareChannelId)
             {
                 if (e.Author.IsBot)
                 {
@@ -185,7 +182,7 @@ namespace ThePathBot
                     await e.Channel.SendMessageAsync(embed: embed).ConfigureAwait(false);
                 }
             }
-            else if (e.Channel.Id == 744753163558584320 && e.Client.CurrentUser.Id != 648636613286690836)
+            else if (e.Channel.Id == 744753163558584320 && e.Client.CurrentUser.Id != 648636613286690836 && !e.Author.IsBot)
             {
                 string message = e.Message.Content;
                 bool isANumber = int.TryParse(message, out int number);
