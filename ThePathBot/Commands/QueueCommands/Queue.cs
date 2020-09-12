@@ -27,7 +27,8 @@ namespace ThePathBot.Commands.QueueCommands
             Title = "Your Queue has been created",
             Description = "To see whos in the queue run ```?showqueue ``` To send the next group of people run ```?sendcode```" +
                 "To change your dodocode run ```?updatedodo``` To kick someone from your queue run " +
-            "```?kick groupNumber positionIngroup``` To end your session run ```?endqueue```",
+            "```?kick groupNumber positionIngroup``` To end your session run ```?endqueue``` To pause your queue run ```?pause```" +
+            "To resume your queue run ```?resume``` To reshow this help message run ```?queuehelp```",
             Color = DiscordColor.Blurple
         };
 
@@ -54,6 +55,16 @@ namespace ThePathBot.Commands.QueueCommands
             {
                 Console.Out.WriteLine(ex.Message);
                 Console.Out.WriteLine(ex.StackTrace);
+            }
+        }
+        [Command("queuehelp")]
+        [Aliases("qh")]
+        [Description("Shows common queue commands")]
+        public async Task QueueHelp(CommandContext ctx)
+        {
+            if (ctx.Channel.Parent.Id == privateChannelGroup)
+            {
+                await ctx.Channel.SendMessageAsync(embed: sessionEmbed).ConfigureAwait(false);
             }
         }
 
