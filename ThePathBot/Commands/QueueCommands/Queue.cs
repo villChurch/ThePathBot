@@ -27,7 +27,8 @@ namespace ThePathBot.Commands.QueueCommands
             Title = "Your Queue has been created",
             Description = "To see whos in the queue run ```?showqueue ``` To send the next group of people run ```?sendcode```" +
                 "To change your dodocode run ```?updatedodo``` To kick someone from your queue run " +
-            "```?kick groupNumber positionIngroup``` To end your session run ```?endqueue```",
+            "```?kick groupNumber positionIngroup``` To end your session run ```?endqueue``` To pause your queue run ```?pause```" +
+            "To resume your queue run ```?resume``` To reshow this help message run ```?queuehelp```",
             Color = DiscordColor.Blurple
         };
 
@@ -54,6 +55,16 @@ namespace ThePathBot.Commands.QueueCommands
             {
                 Console.Out.WriteLine(ex.Message);
                 Console.Out.WriteLine(ex.StackTrace);
+            }
+        }
+        [Command("queuehelp")]
+        [Aliases("qh")]
+        [Description("Shows common queue commands")]
+        public async Task QueueHelp(CommandContext ctx)
+        {
+            if (ctx.Channel.Parent.Id == privateChannelGroup)
+            {
+                await ctx.Channel.SendMessageAsync(embed: sessionEmbed).ConfigureAwait(false);
             }
         }
 
@@ -562,7 +573,7 @@ namespace ThePathBot.Commands.QueueCommands
                         discordIds.Add(reader.GetUInt64("DiscordID"));
                     }
                 }
-                await MoveUsersToOnIsland(discordIds, ctx.Channel.Id);
+                MoveUsersToOnIsland(discordIds, ctx.Channel.Id);
                 foreach(var user in discordIds)
                 {
                     var dmUser = await ctx.Guild.GetMemberAsync(user);
@@ -658,6 +669,7 @@ namespace ThePathBot.Commands.QueueCommands
         }
 
         [Command("updatedodo")]
+        [Aliases("updatecode")]
         [Hidden]
         public async Task UpdateDodoCode(CommandContext ctx, string newcode)
         {
@@ -701,7 +713,128 @@ namespace ThePathBot.Commands.QueueCommands
             }
         }
 
-        private async Task MoveUsersToOnIsland(List<ulong> discordIDs, ulong channelId)
+        [Command("resume")]
+        [Aliases("unpause")]
+        [Description("resumes a paused queue")]
+        public async Task UnPauseQueue(CommandContext ctx)
+        {
+            if (ctx.Channel.Parent.Id != privateChannelGroup)
+            {
+                var msg = await ctx.Channel.SendMessageAsync("You can only run this command from a private queue channel").ConfigureAwait(false);
+                StartTimer(msg);
+                return;
+            }
+            ulong messageId = GetQueueMessageIdFromPrivateChannelId(ctx.Channel.Id);
+            if (messageId == 0)
+            {
+                var msg = await ctx.Channel.SendMessageAsync("Could not find a queue message associated with this channel.").ConfigureAwait(false);
+                StartTimer(msg);
+                return;
+            }
+            ulong channelToSearch;
+            if (IsDaisyQueue(ctx.Channel.Id))
+            {
+                channelToSearch = daisyMaeChannel;
+            }
+            else
+            {
+                channelToSearch = turnipPostChannel;
+            }
+            try
+            {
+                DiscordMessage message = await ctx.Guild.GetChannel(channelToSearch).GetMessageAsync(messageId).ConfigureAwait(false);
+                DiscordEmbed oldEmbed = message.Embeds[0];
+                DiscordEmbed newEmbed = new DiscordEmbedBuilder
+                {
+                    Title = oldEmbed.Title,
+                    Description = $"To join type ```?join {GetCodeFromChannelId(ctx.Channel.Id)}```",
+                    ImageUrl = oldEmbed.Image.Url.ToString(),
+                    Footer = new DiscordEmbedBuilder.EmbedFooter
+                    {
+                        Text = oldEmbed.Footer.Text
+                    }
+                };
+                await message.DeleteAsync();
+                await ctx.Guild.GetChannel(channelToSearch).SendMessageAsync(embed: newEmbed).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Console.Out.WriteLine(ex.Message);
+                Console.Out.WriteLine(ex.StackTrace);
+            }
+        }
+
+        [Command("pause")]
+        [Aliases("pausequeue")]
+        [Description("pauses queue associated with private channel")]
+        public async Task PauseQueueCommand(CommandContext ctx)
+        {
+            if (ctx.Channel.Parent.Id != privateChannelGroup)
+            {
+                var msg = await ctx.Channel.SendMessageAsync("You can only run this command from a private queue channel").ConfigureAwait(false);
+                StartTimer(msg);
+                return;
+            }
+            ulong messageId = GetQueueMessageIdFromPrivateChannelId(ctx.Channel.Id);
+            if (messageId == 0)
+            {
+                var msg = await ctx.Channel.SendMessageAsync("Could not find a queue message associated with this channel.").ConfigureAwait(false);
+                StartTimer(msg);
+                return;
+            }
+            ulong channelToSearch;
+            if (IsDaisyQueue(ctx.Channel.Id))
+            {
+                channelToSearch = daisyMaeChannel;
+            }
+            else
+            {
+                channelToSearch = turnipPostChannel;
+            }
+            try
+            {
+                DiscordMessage queueMessage = await ctx.Guild.GetChannel(channelToSearch).GetMessageAsync(messageId);
+
+                DiscordEmbed embed = new DiscordEmbedBuilder
+                {
+                    Title = queueMessage.Embeds[0].Title,
+                    Description = "Queue is currently paused",
+                    ImageUrl = queueMessage.Embeds[0].Image.Url.ToString(),
+                    Footer = new DiscordEmbedBuilder.EmbedFooter
+                    {
+                        Text = queueMessage.Embeds[0].Footer.Text
+                    }
+                };
+
+                await queueMessage.ModifyAsync(embed: embed).ConfigureAwait(false);
+                MakeQueueInactive(messageId);
+            }
+            catch (Exception ex)
+            {
+                Console.Out.WriteLine(ex.Message);
+                Console.Out.WriteLine(ex.StackTrace);
+            }
+        }
+
+        private bool IsDaisyQueue(ulong privateChannelId)
+        {
+            bool isDaisy = false;
+            using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
+            {
+                string query = "SELECT daisy FROM pathQueues WHERE privateChannelID = ?channelID";
+                MySqlCommand command = new MySqlCommand(query, connection);
+                command.Parameters.Add("?channelID", MySqlDbType.VarChar, 40).Value = privateChannelId;
+                connection.Open();
+                var reader = command.ExecuteReader();
+                if (reader.HasRows)
+                {
+                    isDaisy = reader.GetBoolean("daisy");
+                }
+            }
+            return isDaisy;
+        }
+
+        private void MoveUsersToOnIsland(List<ulong> discordIDs, ulong channelId)
         {
             foreach (var user in discordIDs)
             {
@@ -1096,6 +1229,24 @@ namespace ThePathBot.Commands.QueueCommands
                 connection.Open();
                 command.ExecuteNonQuery();
             }
+        }
+
+        private ulong GetQueueMessageIdFromPrivateChannelId(ulong privateChannelId)
+        {
+            ulong messageId = 0;
+            using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
+            {
+                string query = "SELECT queueMessageID FROM pathQueues WHERE privateChannelID = ?channelId";
+                MySqlCommand command = new MySqlCommand(query, connection);
+                command.Parameters.Add("?channelId", MySqlDbType.VarChar, 40).Value = privateChannelId;
+                connection.Open();
+                var reader = command.ExecuteReader();
+                if (reader.HasRows)
+                {
+                    messageId = reader.GetUInt64("queueMessageID");
+                }
+            }
+            return messageId;
         }
 
         private (int, int) GetGroupNumber(ulong queueChannelID, int maxInGroup)
