@@ -195,7 +195,7 @@ namespace ThePathBot
                         countNumber++;
                         LastCountId = e.Message.Author.Id;
                     }
-                    else if(e.Message.Author.Id == LastCountId)
+                    else if (e.Message.Author.Id == LastCountId)
                     {
                         DiscordEmbedBuilder embed = new DiscordEmbedBuilder
                         {

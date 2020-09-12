@@ -110,7 +110,7 @@ namespace ThePathBot.Commands.TipSystem
         [Command("givetips")]
         [Hidden]
         [RequireUserPermissions(DSharpPlus.Permissions.BanMembers)]
-        public async Task GiveTips(CommandContext ctx, params string[] user)
+        public async Task GiveTips(CommandContext ctx, DiscordMember member, [RemainingText] int tip)
         {
             if (ctx.Guild.Id == 694013861560320081)
             {
@@ -123,37 +123,12 @@ namespace ThePathBot.Commands.TipSystem
                 await ctx.Channel.SendMessageAsync(embed: embed).ConfigureAwait(false);
                 return;
             }
-            IReadOnlyList<DiscordUser> mentionedUser = ctx.Message.MentionedUsers;
-            if (mentionedUser.Count < 1)
-            {
-                return;
-            }
-            List<string> messages = new List<string>(user);
-
-            foreach (DiscordUser mention in mentionedUser)
-            {
-                messages.Remove(mention.Mention);
-                messages.Remove(mention.Mention.Replace("<@!", "<@"));
-            }
-            string message = string.Join("", messages);
-
-            bool successfullyParsed = int.TryParse(message, out int numberToGive);
-
-            if (!successfullyParsed)
-            {
-                return;
-            }
-
-            DiscordUser userToTip = mentionedUser[0];
-
-            int currentTotal = GetTotal(userToTip.Id) - 1;
-            DiscordMember recipient = await ctx.Guild.GetMemberAsync(userToTip.Id);
-            UpdateTotal(userToTip.Id, currentTotal + numberToGive);
-
-            UpdateRoles(currentTotal + numberToGive, userToTip.Id, ctx);
+            int currentTotal = GetTotal(member.Id) - 1;
+            UpdateTotal(member.Id, currentTotal + tip);
+            UpdateRoles(currentTotal + tip, member.Id, ctx);
 
             await ctx.Channel.SendMessageAsync($"Succesfully given " +
-                $"{recipient.DisplayName} {numberToGive} tips.").ConfigureAwait(false);
+                $"{member.DisplayName} {tip} tips.").ConfigureAwait(false);
         }
 
         [Command("showtips")]
