@@ -1,5 +1,4 @@
-﻿using System;
-using Newtonsoft.Json;
+﻿using Newtonsoft.Json;
 
 namespace ThePathBot
 {
@@ -18,6 +17,8 @@ namespace ThePathBot
         [JsonProperty("databaseUser")]
         public string databaseUser { get; private set; }
         [JsonProperty("databasePort")]
-        public string databasePort { get; private set; }
+        public uint databasePort { get; private set; }
+        [JsonProperty("githubToken")]
+        public string gitHubToken { get; private set; }
     }
 }

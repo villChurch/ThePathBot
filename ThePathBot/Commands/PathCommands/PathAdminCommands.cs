@@ -16,7 +16,7 @@ namespace ThePathBot.Commands.PathCommands
 {
     public class PathAdminCommands : BaseCommandModule
     {
-        private string configFilePath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+        private readonly DBConnectionUtils dBConnectionUtils = new DBConnectionUtils();
 
         [Command("showpaths")]
         [Description("show paths for mentioned user")]
@@ -34,36 +34,21 @@ namespace ThePathBot.Commands.PathCommands
             Console.Out.WriteLine(mentions[0].Id.ToString());
             try
             {
-                var dbCon = DBConnection.Instance();
-                var json = string.Empty;
-
-                using (var fs =
-                    File.OpenRead(configFilePath + "/config.json")
-                )
-                using (var sr = new StreamReader(fs, new UTF8Encoding(false)))
-                    json = await sr.ReadToEndAsync().ConfigureAwait(false);
-
-                var configJson = JsonConvert.DeserializeObject<ConfigJson>(json);
-                dbCon.DatabaseName = configJson.databaseName;
-                dbCon.Password = configJson.databasePassword;
-                dbCon.databaseUser = configJson.databaseUser;
-                dbCon.databasePort = configJson.databasePort;
-                Console.Out.WriteLine(dbCon.connectionString);
                 Dictionary<String, String> paths = new Dictionary<string, string>();
                 bool specificPath = false;
                 string query = "Select link, pathname from pathLinks WHERE DiscordID = ?discordID";
 
-                MySqlConnection connection = new MySqlConnection(dbCon.connectionString);
-                var command = new MySqlCommand(query, connection);
-                command.Parameters.Add("?discordid", MySqlDbType.VarChar, 40).Value = mentions[0].Id.ToString();
-                connection.Open();
-                MySqlDataReader reader = command.ExecuteReader();
-                while (reader.Read())
+                using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
                 {
-                    paths.Add(reader.GetString("pathname"), reader.GetString("link"));
+                    var command = new MySqlCommand(query, connection);
+                    command.Parameters.Add("?discordid", MySqlDbType.VarChar, 40).Value = mentions[0].Id.ToString();
+                    connection.Open();
+                    MySqlDataReader reader = command.ExecuteReader();
+                    while (reader.Read())
+                    {
+                        paths.Add(reader.GetString("pathname"), reader.GetString("link"));
+                    }
                 }
-
-                connection.Close();
                 StringBuilder sb = new StringBuilder();
                 foreach (var pathsKey in paths.Keys)
                 {

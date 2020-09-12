@@ -17,7 +17,7 @@ namespace ThePathBot.Commands.PathCommands
 {
     public class MainPathCommands : BaseCommandModule
     {
-        private string configFilePath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+        private readonly DBConnectionUtils dBConnectionUtils = new DBConnectionUtils();
         [Command("addPath")]
         [Description("Adds a path to your list")]
         public async Task AddPath(CommandContext ctx, [Description("link to path followed by path name, eg. link path name")] params String[] args)
@@ -28,35 +28,23 @@ namespace ThePathBot.Commands.PathCommands
                 args[0] = "";
                 var pathName = String.Join(" ", args);
                 DiscordMember pathOwner = ctx.Member;
-                var dbCon = DBConnection.Instance();
-                var json = string.Empty;
-
-                using (var fs =
-                    File.OpenRead(configFilePath + "/config.json")
-                )
-                using (var sr = new StreamReader(fs, new UTF8Encoding(false)))
-                    json = await sr.ReadToEndAsync().ConfigureAwait(false);
-
-                var configJson = JsonConvert.DeserializeObject<ConfigJson>(json);
-                dbCon.DatabaseName = configJson.databaseName;
-                dbCon.Password = configJson.databasePassword;
-                dbCon.databaseUser = configJson.databaseUser;
-                dbCon.databasePort = configJson.databasePort;
-                MySqlConnection connection = new MySqlConnection(dbCon.connectionString);
-
-                string query = "INSERT INTO pathLinks (DiscordID, link, pathname) values (?discordid, ?link, ?pathName)";
-                var command = new MySqlCommand(query, connection);
-                command.Parameters.Add("?discordid", MySqlDbType.VarChar, 40).Value = pathOwner.Id.ToString();
-                command.Parameters.Add("?link", MySqlDbType.VarChar, 2500).Value = pathLink;
-                command.Parameters.Add("?pathName", MySqlDbType.VarChar, 255).Value = pathName.Trim();
-                connection.Open();
-                command.ExecuteNonQuery();
-                connection.Close();
+                using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
+                {
+                    string query = "INSERT INTO pathLinks (DiscordID, link, pathname) values (?discordid, ?link, ?pathName)";
+                    var command = new MySqlCommand(query, connection);
+                    command.Parameters.Add("?discordid", MySqlDbType.VarChar, 40).Value = pathOwner.Id.ToString();
+                    command.Parameters.Add("?link", MySqlDbType.VarChar, 2500).Value = pathLink;
+                    command.Parameters.Add("?pathName", MySqlDbType.VarChar, 255).Value = pathName.Trim();
+                    connection.Open();
+                    command.ExecuteNonQuery();
+                }
                 await ctx.Channel.SendMessageAsync("Added path <" + pathLink + "> to your list of saved paths")
                     .ConfigureAwait(false);
             }
             catch (Exception ex)
             {
+                Console.Out.WriteLine(ex.Message);
+                Console.Out.WriteLine(ex.StackTrace);
                 var failureEmbed = new DiscordEmbedBuilder
                 {
                     Title = "Error",
@@ -74,21 +62,6 @@ namespace ThePathBot.Commands.PathCommands
         {
             try
             {
-                var dbCon = DBConnection.Instance();
-                var json = string.Empty;
-
-                using (var fs =
-                    File.OpenRead(configFilePath + "/config.json")
-                )
-                using (var sr = new StreamReader(fs, new UTF8Encoding(false)))
-                    json = await sr.ReadToEndAsync().ConfigureAwait(false);
-
-                var configJson = JsonConvert.DeserializeObject<ConfigJson>(json);
-                dbCon.DatabaseName = configJson.databaseName;
-                dbCon.Password = configJson.databasePassword;
-                dbCon.databaseUser = configJson.databaseUser;
-                dbCon.databasePort = configJson.databasePort;
-                Console.Out.WriteLine(dbCon.connectionString);
                 Dictionary<String, String> paths = new Dictionary<string, string>();
                 bool specificPath = false;
                 string query = "Select link, pathname from pathLinks WHERE DiscordID = ?discordID";
@@ -100,22 +73,22 @@ namespace ThePathBot.Commands.PathCommands
                         "Select link, pathname from pathLinks WHERE DiscordID = ?discordID AND pathname = ?pathName";
                     specificPath = true;
                 }
-                MySqlConnection connection = new MySqlConnection(dbCon.connectionString);
-                var command = new MySqlCommand(query, connection);
-
-                if (specificPath)
+                using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
                 {
-                    command.Parameters.Add("?pathName", MySqlDbType.VarChar, 255).Value = pathToSearch;
-                }
-                command.Parameters.Add("?discordid", MySqlDbType.VarChar, 40).Value = ctx.Member.Id.ToString();
-                connection.Open();
-                MySqlDataReader reader = command.ExecuteReader();
-                while (reader.Read())
-                {
-                    paths.Add(reader.GetString("pathname"), reader.GetString("link"));
-                }
+                    var command = new MySqlCommand(query, connection);
 
-                connection.Close();
+                    if (specificPath)
+                    {
+                        command.Parameters.Add("?pathName", MySqlDbType.VarChar, 255).Value = pathToSearch;
+                    }
+                    command.Parameters.Add("?discordid", MySqlDbType.VarChar, 40).Value = ctx.Member.Id.ToString();
+                    connection.Open();
+                    MySqlDataReader reader = command.ExecuteReader();
+                    while (reader.Read())
+                    {
+                        paths.Add(reader.GetString("pathname"), reader.GetString("link"));
+                    }
+                }
                 var pathEmbed = new DiscordEmbedBuilder
                 {
                     Title = ctx.Member.Nickname + " saved paths",
@@ -125,7 +98,6 @@ namespace ThePathBot.Commands.PathCommands
                 foreach (var pathsKey in paths.Keys)
                 {
                     sb.AppendLine(pathsKey + " - " + paths[pathsKey]);
-                    // pathEmbed.AddField(pathsKey, paths[pathsKey], false);
                 }
 
                 var interactivity = ctx.Client.GetInteractivity();
@@ -133,7 +105,6 @@ namespace ThePathBot.Commands.PathCommands
                     interactivity.GeneratePagesInEmbed(sb.ToString(), SplitType.Line, new DiscordEmbedBuilder());
                 await interactivity.SendPaginatedMessageAsync(ctx.Channel, ctx.User, pathsPages)
                     .ConfigureAwait(false);
-                //await ctx.Channel.SendMessageAsync(embed: pathEmbed).ConfigureAwait(false);
             }
             catch (ArgumentException argumentException)
             {
@@ -171,34 +142,18 @@ namespace ThePathBot.Commands.PathCommands
             {
                 string path = String.Join(" ", args);
                 DiscordMember pathOwner = ctx.Member;
-                var dbCon = DBConnection.Instance();
-                var json = string.Empty;
-
-                using (var fs =
-                    File.OpenRead(configFilePath + "/config.json")
-                )
-                using (var sr = new StreamReader(fs, new UTF8Encoding(false)))
-                    json = await sr.ReadToEndAsync().ConfigureAwait(false);
-
-                var configJson = JsonConvert.DeserializeObject<ConfigJson>(json);
-                dbCon.DatabaseName = configJson.databaseName;
-                dbCon.Password = configJson.databasePassword;
-                dbCon.databaseUser = configJson.databaseUser;
-                dbCon.databasePort = configJson.databasePort;
-                MySqlConnection connection = new MySqlConnection(dbCon.connectionString);
-
-                string query = "DELETE FROM pathLinks WHERE (DiscordID = ?discordId) AND (pathname = '?path')";
-                var command = new MySqlCommand("RemovePath", connection);
-                command.CommandType = CommandType.StoredProcedure;
-                command.Parameters.Add("DiscordID", MySqlDbType.VarChar, 40).Value = pathOwner.Id.ToString();
-                command.Parameters.Add("pathName", MySqlDbType.VarChar, 255).Value = path.Trim();
-                connection.Open();
-                var commandtext = command.CommandText;
-                foreach (MySqlParameter p in command.Parameters)
-                    commandtext = commandtext.Replace(p.ParameterName, p.Value.ToString());
-                Console.Out.WriteLine(commandtext);
-                command.ExecuteNonQuery();
-                connection.Close();
+                using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
+                {
+                    string query = "DELETE FROM pathLinks WHERE (DiscordID = ?discordId) AND (pathname = '?path')";
+                    var command = new MySqlCommand("RemovePath", connection)
+                    {
+                        CommandType = CommandType.StoredProcedure
+                    };
+                    command.Parameters.Add("DiscordID", MySqlDbType.VarChar, 40).Value = pathOwner.Id.ToString();
+                    command.Parameters.Add("pathName", MySqlDbType.VarChar, 255).Value = path.Trim();
+                    connection.Open();
+                    command.ExecuteNonQuery();
+                }
                 await ctx.Channel.SendMessageAsync("Deleted " + path + " from your list of saved paths")
                     .ConfigureAwait(false);
             }
@@ -271,39 +226,21 @@ namespace ThePathBot.Commands.PathCommands
 
                 string query =
                     "Select link, pathname from pathLinks WHERE DiscordID = ?discordID AND pathname = ?pathName";
-
-                DBConnection dbCon = DBConnection.Instance();
-                string json = string.Empty;
-
-                using (FileStream fs =
-                    File.OpenRead(configFilePath + "/config.json")
-                )
-                using (StreamReader sr = new StreamReader(fs, new UTF8Encoding(false)))
-                {
-                    json = await sr.ReadToEndAsync().ConfigureAwait(false);
-                }
-
-                ConfigJson configJson = JsonConvert.DeserializeObject<ConfigJson>(json);
-                dbCon.DatabaseName = configJson.databaseName;
-                dbCon.Password = configJson.databasePassword;
-                dbCon.databaseUser = configJson.databaseUser;
-                dbCon.databasePort = configJson.databasePort;
-                Console.Out.WriteLine(dbCon.connectionString);
                 Dictionary<string, string> paths = new Dictionary<string, string>();
 
-                MySqlConnection connection = new MySqlConnection(dbCon.connectionString);
-                MySqlCommand command = new MySqlCommand(query, connection);
-
-                command.Parameters.Add("?pathName", MySqlDbType.VarChar, 255).Value = searchpath;
-                command.Parameters.Add("?discordid", MySqlDbType.VarChar, 40).Value = ctx.Member.Id.ToString();
-                connection.Open();
-                MySqlDataReader reader = command.ExecuteReader();
-                while (reader.Read())
+                using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
                 {
-                    paths.Add(reader.GetString("pathname"), reader.GetString("link"));
-                }
+                    MySqlCommand command = new MySqlCommand(query, connection);
 
-                connection.Close();
+                    command.Parameters.Add("?pathName", MySqlDbType.VarChar, 255).Value = searchpath;
+                    command.Parameters.Add("?discordid", MySqlDbType.VarChar, 40).Value = ctx.Member.Id.ToString();
+                    connection.Open();
+                    MySqlDataReader reader = command.ExecuteReader();
+                    while (reader.Read())
+                    {
+                        paths.Add(reader.GetString("pathname"), reader.GetString("link"));
+                    }
+                }
                 if (paths.Count < 1)
                 {
                     DiscordEmbedBuilder noPathsEmbed = new DiscordEmbedBuilder
@@ -392,31 +329,18 @@ namespace ThePathBot.Commands.PathCommands
                 var pathLink = attachmentList[0].Url;
                 var pathName = String.Join(" ", args);
                 DiscordMember pathOwner = ctx.Member;
-                var dbCon = DBConnection.Instance();
-                var json = string.Empty;
 
-                using (var fs =
-                    File.OpenRead(configFilePath + "/config.json")
-                )
-                using (var sr = new StreamReader(fs, new UTF8Encoding(false)))
-                    json = await sr.ReadToEndAsync().ConfigureAwait(false);
-
-                var configJson = JsonConvert.DeserializeObject<ConfigJson>(json);
-                dbCon.DatabaseName = configJson.databaseName;
-                dbCon.Password = configJson.databasePassword;
-                dbCon.databaseUser = configJson.databaseUser;
-                dbCon.databasePort = configJson.databasePort;
-                MySqlConnection connection = new MySqlConnection(dbCon.connectionString);
-
-                string query =
-                    "INSERT INTO pathLinks (DiscordID, link, pathname) values (?discordid, ?link, ?pathName)";
-                var command = new MySqlCommand(query, connection);
-                command.Parameters.Add("?discordid", MySqlDbType.VarChar, 40).Value = pathOwner.Id.ToString();
-                command.Parameters.Add("?link", MySqlDbType.VarChar, 2500).Value = pathLink.Trim();
-                command.Parameters.Add("?pathName", MySqlDbType.VarChar, 255).Value = pathName.Trim();
-                connection.Open();
-                command.ExecuteNonQuery();
-                connection.Close();
+                using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
+                {
+                    string query =
+                        "INSERT INTO pathLinks (DiscordID, link, pathname) values (?discordid, ?link, ?pathName)";
+                    var command = new MySqlCommand(query, connection);
+                    command.Parameters.Add("?discordid", MySqlDbType.VarChar, 40).Value = pathOwner.Id.ToString();
+                    command.Parameters.Add("?link", MySqlDbType.VarChar, 2500).Value = pathLink.Trim();
+                    command.Parameters.Add("?pathName", MySqlDbType.VarChar, 255).Value = pathName.Trim();
+                    connection.Open();
+                    command.ExecuteNonQuery();
+                }
                 await ctx.Channel.SendMessageAsync("Added path <" + pathLink + "> to your list of saved paths")
                     .ConfigureAwait(false);
             }
@@ -435,7 +359,7 @@ namespace ThePathBot.Commands.PathCommands
             }
         }
 
-        [Command("renamepath")]
+        [Command("renamepath")] //WIP
         [Description("renames the chosen path")]
         [Hidden]
         [RequireOwner]

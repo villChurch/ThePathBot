@@ -15,29 +15,8 @@ namespace ThePathBot.Services
 
         public static async Task CreateTicket(DiscordChannel channel, DiscordGuild guild, string content, string type)
         {
-            MySqlConnection connection = await GetDBConnectionAsync();
+            //MySqlConnection connection = await GetDBConnectionAsync();
 
-        }
-        private static async Task<MySqlConnection> GetDBConnectionAsync()
-        {
-            DBConnection dbCon = DBConnection.Instance();
-            string json = string.Empty;
-
-            using (FileStream fs =
-                File.OpenRead(configFilePath + "/config.json")
-            )
-            using (StreamReader sr = new StreamReader(fs, new UTF8Encoding(false)))
-            {
-                json = await sr.ReadToEndAsync().ConfigureAwait(false);
-            }
-
-            ConfigJson configJson = JsonConvert.DeserializeObject<ConfigJson>(json);
-            dbCon.DatabaseName = configJson.databaseName;
-            dbCon.Password = configJson.databasePassword;
-            dbCon.databaseUser = configJson.databaseUser;
-            dbCon.databasePort = configJson.databasePort;
-            MySqlConnection connection = new MySqlConnection(dbCon.connectionString);
-            return connection;
         }
     }
 }

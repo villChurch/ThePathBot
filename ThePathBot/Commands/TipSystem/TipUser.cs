@@ -15,7 +15,7 @@ namespace ThePathBot.Commands.TipSystem
 {
     public class TipUser : BaseCommandModule
     {
-        private readonly string configFilePath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+        private readonly DBConnectionUtils dBConnectionUtils = new DBConnectionUtils();
         private readonly ulong visitingMerchantRoleId = 744722781106733077;
 
         [Command("tip")]
@@ -38,7 +38,6 @@ namespace ThePathBot.Commands.TipSystem
             var users = ctx.Message.MentionedUsers;
             List<string> messages = new List<string>(args);
             List<ulong> discordIds = new List<ulong>();
-
             foreach (DiscordUser user in users)
             {
                 if (user.Id != ctx.Member.Id)
@@ -48,6 +47,7 @@ namespace ThePathBot.Commands.TipSystem
                 messages.Remove(user.Mention);
                 messages.Remove(user.Mention.Replace("<@!", "<@"));
             }
+            discordIds = discordIds.Distinct().ToList();
             if (discordIds.Count < 1)
             {
                 var failureEmbed = new DiscordEmbedBuilder
@@ -65,33 +65,15 @@ namespace ThePathBot.Commands.TipSystem
             {
                 message = "Unfortunately they did not leave a message";
             }
-
-            DBConnection dbCon = DBConnection.Instance();
-            string json = string.Empty;
-
-            using (FileStream fs =
-                File.OpenRead(configFilePath + "/config.json")
-            )
-            using (StreamReader sr = new StreamReader(fs, new UTF8Encoding(false)))
-            {
-                json = await sr.ReadToEndAsync().ConfigureAwait(false);
-            }
-
-            ConfigJson configJson = JsonConvert.DeserializeObject<ConfigJson>(json);
-            dbCon.DatabaseName = configJson.databaseName;
-            dbCon.Password = configJson.databasePassword;
-            dbCon.databaseUser = configJson.databaseUser;
-            dbCon.databasePort = configJson.databasePort;
-            MySqlConnection connection = new MySqlConnection(dbCon.connectionString);
             try
             {
                 foreach (ulong user in discordIds)
                 {
-                    AddTip(user, ctx.Member.Id, message, connection);
+                    AddTip(user, ctx.Member.Id, message);
                     //command.Dispose();
 
-                    int newTotal = GetTotal(user, connection);
-                    UpdateTotal(user, newTotal, connection);
+                    int newTotal = GetTotal(user);
+                    UpdateTotal(user, newTotal);
                     DiscordMember recipient = await ctx.Guild.GetMemberAsync(user);
                     DiscordEmbedBuilder repEmbed = new DiscordEmbedBuilder
                     {
@@ -123,10 +105,6 @@ namespace ThePathBot.Commands.TipSystem
                 Console.Out.WriteLine(ex.Message);
                 Console.Out.WriteLine(ex.StackTrace);
             }
-            finally
-            {
-                connection.Close();
-            }
         }
 
         [Command("givetips")]
@@ -145,38 +123,12 @@ namespace ThePathBot.Commands.TipSystem
                 await ctx.Channel.SendMessageAsync(embed: embed).ConfigureAwait(false);
                 return;
             }
-            IReadOnlyList<DiscordUser> mentionedUser = ctx.Message.MentionedUsers;
-            if (mentionedUser.Count < 1)
-            {
-                return;
-            }
-
-            DBConnection dbCon = DBConnection.Instance();
-            string json = string.Empty;
-
-            using (FileStream fs =
-                File.OpenRead(configFilePath + "/config.json")
-            )
-            using (StreamReader sr = new StreamReader(fs, new UTF8Encoding(false)))
-            {
-                json = await sr.ReadToEndAsync().ConfigureAwait(false);
-            }
-
-            ConfigJson configJson = JsonConvert.DeserializeObject<ConfigJson>(json);
-            dbCon.DatabaseName = configJson.databaseName;
-            dbCon.Password = configJson.databasePassword;
-            dbCon.databaseUser = configJson.databaseUser;
-            dbCon.databasePort = configJson.databasePort;
-            MySqlConnection connection = new MySqlConnection(dbCon.connectionString);
-
-            int currentTotal = GetTotal(member.Id, connection) - 1;
-            DiscordMember recipient = await ctx.Guild.GetMemberAsync(member.Id);
-            UpdateTotal(member.Id, currentTotal + tip, connection);
-
+            int currentTotal = GetTotal(member.Id) - 1;
+            UpdateTotal(member.Id, currentTotal + tip);
             UpdateRoles(currentTotal + tip, member.Id, ctx);
 
             await ctx.Channel.SendMessageAsync($"Succesfully given " +
-                $"{recipient.DisplayName} {tip} tips.").ConfigureAwait(false);
+                $"{member.DisplayName} {tip} tips.").ConfigureAwait(false);
         }
 
         [Command("showtips")]
@@ -194,41 +146,26 @@ namespace ThePathBot.Commands.TipSystem
                 await ctx.Channel.SendMessageAsync(embed: embed).ConfigureAwait(false);
                 return;
             }
-            DBConnection dbCon = DBConnection.Instance();
-            string json = string.Empty;
-
-            using (FileStream fs =
-                File.OpenRead(configFilePath + "/config.json")
-            )
-            using (StreamReader sr = new StreamReader(fs, new UTF8Encoding(false)))
-            {
-                json = await sr.ReadToEndAsync().ConfigureAwait(false);
-            }
-
-            ConfigJson configJson = JsonConvert.DeserializeObject<ConfigJson>(json);
-            dbCon.DatabaseName = configJson.databaseName;
-            dbCon.Password = configJson.databasePassword;
-            dbCon.databaseUser = configJson.databaseUser;
-            dbCon.databasePort = configJson.databasePort;
-            MySqlConnection connection = new MySqlConnection(dbCon.connectionString);
             try
             {
                 int tipTotal = 0;
-                string query = "Select total from pathRep where DiscordID = ?discordId";
-                MySqlCommand command = new MySqlCommand(query, connection);
-                command.Parameters.Add("?discordId", MySqlDbType.VarChar, 40).Value = ctx.Member.Id;
-                connection.Open();
-                MySqlDataReader reader = command.ExecuteReader();
-                if (reader.HasRows)
+                using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
                 {
-                    while (reader.Read())
+                    string query = "Select total from pathRep where DiscordID = ?discordId";
+                    MySqlCommand command = new MySqlCommand(query, connection);
+                    command.Parameters.Add("?discordId", MySqlDbType.VarChar, 40).Value = ctx.Member.Id;
+                    connection.Open();
+                    MySqlDataReader reader = command.ExecuteReader();
+                    if (reader.HasRows)
                     {
-                        tipTotal = reader.GetInt32("total");
+                        while (reader.Read())
+                        {
+                            tipTotal = reader.GetInt32("total");
+                        }
                     }
+
+                    reader.Close();
                 }
-
-                reader.Close();
-
                 DiscordEmbedBuilder tipEmbed = new DiscordEmbedBuilder
                 {
                     Description = $"{ctx.Member.DisplayName} has {tipTotal} tips.",
@@ -246,89 +183,79 @@ namespace ThePathBot.Commands.TipSystem
                 Console.Out.WriteLine(ex.Message);
                 Console.Out.WriteLine(ex.StackTrace);
             }
-            finally
-            {
-                connection.Close();
-            }
-
         }
 
-        private void AddTip(ulong recipient, ulong sender, string message, MySqlConnection connection)
+        private void AddTip(ulong recipient, ulong sender, string message)
         {
             try
             {
-                string query =
-                            "INSERT INTO pathTips (RecipientID, SenderID, Message) values (?recipient, ?sender, ?msg)";
-                MySqlCommand command = new MySqlCommand(query, connection);
-                command.Parameters.Add("?recipient", MySqlDbType.VarChar, 40).Value = recipient;
-                command.Parameters.Add("?sender", MySqlDbType.VarChar, 40).Value = sender;
-                command.Parameters.Add("?msg", MySqlDbType.VarChar, 255).Value = message.Trim();
-                //command.Parameters.Add("?timestamp", MySqlDbType.Timestamp).Value = ctx.Message.Timestamp.ToUnixTimeMilliseconds();
-                connection.Open();
-                command.ExecuteNonQuery();
-                connection.Close();
-            }
-            catch (Exception ex)
-            {
-                throw;
-            }
-            finally
-            {
-                connection.Close();
-            }
-        }
-
-        private int GetTotal(ulong user, MySqlConnection connection)
-        {
-            try
-            {
-                int tipTotal = 0;
-                string query = "Select total from pathRep where DiscordID = ?discordId";
-                MySqlCommand command = new MySqlCommand(query, connection);
-                command.Parameters.Add("?discordId", MySqlDbType.VarChar, 40).Value = user;
-                connection.Open();
-                MySqlDataReader reader = command.ExecuteReader();
-                if (reader.HasRows)
+                using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
                 {
-                    while (reader.Read())
-                    {
-                        tipTotal = reader.GetInt32("total");
-                    }
+                    string query =
+                            "INSERT INTO pathTips (RecipientID, SenderID, Message) values (?recipient, ?sender, ?msg)";
+                    MySqlCommand command = new MySqlCommand(query, connection);
+                    command.Parameters.Add("?recipient", MySqlDbType.VarChar, 40).Value = recipient;
+                    command.Parameters.Add("?sender", MySqlDbType.VarChar, 40).Value = sender;
+                    command.Parameters.Add("?msg", MySqlDbType.VarChar, 255).Value = message.Trim();
+                    //command.Parameters.Add("?timestamp", MySqlDbType.Timestamp).Value = ctx.Message.Timestamp.ToUnixTimeMilliseconds();
+                    connection.Open();
+                    command.ExecuteNonQuery();
                 }
-
-                reader.Close();
-                connection.Close();
-                return tipTotal + 1;
-            }
-            catch (Exception ex)
-            {
-                throw;
-            }
-            finally
-            {
-                connection.Close();
-            }
-        }
-
-        private void UpdateTotal(ulong user, int total, MySqlConnection connection)
-        {
-            try
-            {
-                string query = "Insert into pathRep (DiscordID, total) values (?discordId, ?total) on Duplicate KEY UPDATE total = ?total";
-                MySqlCommand command = new MySqlCommand(query, connection);
-                connection.Open();
-                command.Parameters.Add("?discordId", MySqlDbType.VarChar, 40).Value = user;
-                command.Parameters.Add("?total", MySqlDbType.Int32).Value = total;
-                command.ExecuteNonQuery();
-                connection.Close();
             }
             catch (Exception ex)
             {
                 throw ex;
             }
-            finally
+        }
+
+        private int GetTotal(ulong user)
+        {
+            try
             {
-                connection.Close();
+                int tipTotal = 0;
+                using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
+                {
+                    string query = "Select total from pathRep where DiscordID = ?discordId";
+                    MySqlCommand command = new MySqlCommand(query, connection);
+                    command.Parameters.Add("?discordId", MySqlDbType.VarChar, 40).Value = user;
+                    connection.Open();
+                    MySqlDataReader reader = command.ExecuteReader();
+                    if (reader.HasRows)
+                    {
+                        while (reader.Read())
+                        {
+                            tipTotal = reader.GetInt32("total");
+                        }
+                    }
+
+                    reader.Close();
+                }
+                return tipTotal + 1;
+
+            }
+            catch (Exception ex)
+            {
+                throw ex;
+            }
+        }
+
+        private void UpdateTotal(ulong user, int total)
+        {
+            try
+            {
+                using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
+                {
+                    string query = "Insert into pathRep (DiscordID, total) values (?discordId, ?total) on Duplicate KEY UPDATE total = ?total";
+                    MySqlCommand command = new MySqlCommand(query, connection);
+                    connection.Open();
+                    command.Parameters.Add("?discordId", MySqlDbType.VarChar, 40).Value = user;
+                    command.Parameters.Add("?total", MySqlDbType.Int32).Value = total;
+                    command.ExecuteNonQuery();
+                }
+            }
+            catch (Exception ex)
+            {
+                throw ex;
             }
         }
 
