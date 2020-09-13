@@ -17,8 +17,8 @@ namespace ThePathBot.Commands.QueueCommands
 {
     public class Queue : BaseCommandModule
     {
-        private readonly ulong privateChannelGroup = 745024494464270448; //test server 744273831602028645;
-        private readonly ulong turnipPostChannel = 744733259748999270; //test server 744644693479915591;
+        private readonly ulong privateChannelGroup = 744273831602028645; // honna 745024494464270448; //test server 
+        private readonly ulong turnipPostChannel = 744644693479915591; // honna 744733259748999270; 
         private readonly ulong daisyMaeChannel = 744733207148232845;
         private readonly DBConnectionUtils dBConnectionUtils = new DBConnectionUtils();
         private Timer msgDestructTimer;
@@ -691,9 +691,10 @@ namespace ThePathBot.Commands.QueueCommands
                 {
                     string query = "UPDATE pathQueues SET dodoCode = ?newcode WHERE privateChannelID = ?currentChannel";
                     var command = new MySqlCommand(query, connection);
-                    command.Parameters.Add("?newcode", MySqlDbType.VarChar, 5).Value = newcode;
+                    command.Parameters.Add("?newcode", MySqlDbType.VarChar, 5).Value = newcode.Trim();
                     command.Parameters.Add("?currentChannel", MySqlDbType.VarChar, 40).Value = ctx.Channel.Id;
                     connection.Open();
+                    command.ExecuteNonQuery();
                 }
 
                 var msg = await ctx.Channel.SendMessageAsync($"Dodo code is now updated to {newcode}").ConfigureAwait(false);
