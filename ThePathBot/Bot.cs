@@ -17,6 +17,7 @@ using Microsoft.Extensions.DependencyInjection;
 using ThePathBot.Listeners;
 using System.Reflection;
 using ThePathBot.Services;
+using System.Timers;
 
 namespace ThePathBot
 {
@@ -31,6 +32,7 @@ namespace ThePathBot
         private readonly ulong nookShopChannelId = 744733259748999270; // test channel 746852898465644544;
         private readonly ulong codeShareChannelId = 744751909805752330;
         private readonly DBConnectionUtils dBConnectionUtils = new DBConnectionUtils();
+        private Timer giveawayTimer;
 
         //private static readonly DateTime UnixEpoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         private int totalMembers = 0;
@@ -39,6 +41,23 @@ namespace ThePathBot
 
         public Bot()
         {
+        }
+
+        private void StartTimer(DiscordClient client)
+        {
+            giveawayTimer = new Timer
+            {
+                Interval = 60000 // 60 seconds
+            };
+            giveawayTimer.Elapsed += (sender, e) => CheckGiveaways(sender, e, client);
+            giveawayTimer.AutoReset = true;
+            giveawayTimer.Enabled = true;
+        }
+
+        private void CheckGiveaways(object source, ElapsedEventArgs e, DiscordClient client)
+        {
+            GiveawayService gs = new GiveawayService();
+            gs.CheckForCompletedGiveaways(client);
         }
 
         private static int GetCountNumberOnRestart()
@@ -113,6 +132,7 @@ namespace ThePathBot
             Services = new ServiceCollection()
                 .AddSingleton<ReactionService>()
                 .AddScoped<TicketService>()
+                .AddScoped<GiveawayService>()
                 .BuildServiceProvider(true);
 #pragma warning restore CS1702 // Assuming assembly reference matches identity
 
