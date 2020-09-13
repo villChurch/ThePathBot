@@ -829,7 +829,10 @@ namespace ThePathBot.Commands.QueueCommands
                 var reader = command.ExecuteReader();
                 if (reader.HasRows)
                 {
-                    isDaisy = reader.GetBoolean("daisy");
+                    while (reader.Read())
+                    {
+                        isDaisy = reader.GetBoolean("daisy");
+                    }
                 }
             }
             return isDaisy;
@@ -1244,7 +1247,10 @@ namespace ThePathBot.Commands.QueueCommands
                 var reader = command.ExecuteReader();
                 if (reader.HasRows)
                 {
-                    messageId = reader.GetUInt64("queueMessageID");
+                    while (reader.Read())
+                    {
+                        messageId = reader.GetUInt64("queueMessageID");
+                    }
                 }
             }
             return messageId;
