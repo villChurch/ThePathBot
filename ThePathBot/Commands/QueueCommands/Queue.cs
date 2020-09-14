@@ -756,7 +756,10 @@ namespace ThePathBot.Commands.QueueCommands
                     }
                 };
                 await message.DeleteAsync();
-                await ctx.Guild.GetChannel(channelToSearch).SendMessageAsync(embed: newEmbed).ConfigureAwait(false);
+                MakeQueueActive(ctx.Channel.Id);
+                var newMsg = await ctx.Guild.GetChannel(channelToSearch).SendMessageAsync(embed: newEmbed).ConfigureAwait(false);
+                UpdateMessageID(ctx.Channel.Id, newMsg.Id);
+                await ctx.Channel.SendMessageAsync("Queue has been resumed").ConfigureAwait(false); 
             }
             catch (Exception ex)
             {
@@ -809,6 +812,7 @@ namespace ThePathBot.Commands.QueueCommands
 
                 await queueMessage.ModifyAsync(embed: embed).ConfigureAwait(false);
                 MakeQueueInactive(messageId);
+                await ctx.Channel.SendMessageAsync("Queue has been paused").ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -1213,6 +1217,44 @@ namespace ThePathBot.Commands.QueueCommands
             {
                 Console.Out.WriteLine(ex.Message);
                 Console.Out.WriteLine(ex.StackTrace);
+            }
+        }
+
+        private void UpdateMessageID(ulong privateChannelID, ulong MessageID)
+        {
+            try
+            {
+                using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
+                {
+                    string query = "UPDATE pathQueues SET queueMessageID = ?msgId WHERE privateChannelID = ?channelId";
+                    MySqlCommand command = new MySqlCommand(query, connection);
+                    command.Parameters.Add("?mgsId", MySqlDbType.VarChar, 40).Value = MessageID;
+                    command.Parameters.Add("?channelId", MySqlDbType.VarChar, 40).Value = privateChannelID;
+                    connection.Open();
+                    command.ExecuteNonQuery();
+                }
+            }
+            catch (Exception ex)
+            {
+                throw ex;
+            }
+        }
+        private void MakeQueueActive(ulong privateChannelID)
+        {
+            try
+            {
+                using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
+                {
+                    string query = "UPDATE pathQueues SET active = 1 WHERE privateChannelID = ?channelId";
+                    MySqlCommand command = new MySqlCommand(query, connection);
+                    command.Parameters.Add("?channelId", MySqlDbType.VarChar, 40).Value = privateChannelID;
+                    connection.Open();
+                    command.ExecuteNonQuery();
+                }
+            }
+            catch (Exception ex)
+            {
+                throw ex;
             }
         }
 
