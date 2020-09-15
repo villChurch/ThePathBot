@@ -17,6 +17,9 @@ using Microsoft.Extensions.DependencyInjection;
 using ThePathBot.Listeners;
 using System.Reflection;
 using ThePathBot.Services;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text.RegularExpressions;
 
 namespace ThePathBot
 {
@@ -31,6 +34,13 @@ namespace ThePathBot
         private readonly ulong nookShopChannelId = 744733259748999270; // test channel 746852898465644544;
         private readonly ulong codeShareChannelId = 744751909805752330;
         private readonly DBConnectionUtils dBConnectionUtils = new DBConnectionUtils();
+        private List<ulong> rolesList = new List<ulong>
+        {
+            744731961309790208,
+            744723803560607744,
+            744800999360954389,
+            744722910161272954
+        };
 
         //private static readonly DateTime UnixEpoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         private int totalMembers = 0;
@@ -155,6 +165,15 @@ namespace ThePathBot
             await ReactionService.CheckReactionAddedIsFridgeReaction(e);
         }
 
+        private bool HasRole(DiscordMember member)
+        {
+            var memberRoles = member.Roles;
+
+            List<ulong> memberRolesIds = memberRoles.Select(role => role.Id).ToList();
+
+            IEnumerable<ulong> commonRoles = memberRolesIds.Intersect(rolesList);
+            return commonRoles.ToList().Count > 0;
+        }
         private async Task Client_MessageCreated(MessageCreateEventArgs e)
         {
             if (e.Channel.Id == daisymaeChannelId || e.Channel.Id == nookShopChannelId || e.Channel.Id == codeShareChannelId)
@@ -164,7 +183,13 @@ namespace ThePathBot
                     return;
                 }
 
-                if (e.Message.Content.StartsWith("?join"))
+                if (Regex.Matches(e.Message.Content, @"((\?join) ([a-zA-Z0-9]{5}))").Count > 0)
+                {
+                    return;
+                }
+
+                DiscordMember member = await e.Guild.GetMemberAsync(e.Author.Id);
+                if (HasRole(member))
                 {
                     return;
                 }
