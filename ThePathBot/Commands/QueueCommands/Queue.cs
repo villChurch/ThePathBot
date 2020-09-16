@@ -48,13 +48,16 @@ namespace ThePathBot.Commands.QueueCommands
             try
             {
                 await msg.DeleteAsync();
-                msgDestructTimer.Stop();
-                msgDestructTimer.Dispose();
             }
             catch (Exception ex)
             {
                 Console.Out.WriteLine(ex.Message);
                 Console.Out.WriteLine(ex.StackTrace);
+            }
+            finally
+            {
+                msgDestructTimer.Stop();
+                msgDestructTimer.Dispose();
             }
         }
         [Command("queuehelp")]
@@ -65,6 +68,89 @@ namespace ThePathBot.Commands.QueueCommands
             if (ctx.Channel.Parent.Id == privateChannelGroup)
             {
                 await ctx.Channel.SendMessageAsync(embed: sessionEmbed).ConfigureAwait(false);
+            }
+        }
+
+        [Command("sendmessage")]
+        [Aliases("sendmsg", "sm", "smessage", "smsg")]
+        [Description("Sends a message to everyone in you queue")]
+        public async Task SendMessageToQueuers(CommandContext ctx, [Description("Message you want to send"), RemainingText] string message)
+        {
+            try
+            {
+                if (ctx.Channel.Parent.Id != privateChannelGroup)
+                {
+                    await ctx.Channel.SendMessageAsync("You can only run this command from a private queue channel").ConfigureAwait(false);
+                    return;
+                }
+
+                if (message.Length < 1 || string.IsNullOrEmpty(message))
+                {
+                    await ctx.Channel.SendMessageAsync("You have not entered a message").ConfigureAwait(false);
+                    return;
+                }
+
+                List<ulong> discordIds = new List<ulong>();
+                ulong queueOwnerId = 0;
+                using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
+                {
+                    string query = "SELECT DiscordID from pathQueuers WHERE queueChannelID = ?pChannelId and visited = 0";
+                    var command = new MySqlCommand(query, connection);
+                    command.Parameters.Add("?pChannelId", MySqlDbType.VarChar, 40).Value = ctx.Channel.Id;
+                    connection.Open();
+                    var reader = command.ExecuteReader();
+
+                    if (reader.HasRows)
+                    {
+                        while (reader.NextResult())
+                        {
+                            discordIds.Add(reader.GetUInt64("DiscordID"));
+                        }
+                    }
+                    reader.Close();
+                }
+                using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
+                {
+                    string query = "SELECT queueOwner from pathQueues WHERE privateChannelID = ?pChannelId";
+                    var command = new MySqlCommand(query, connection);
+                    command.Parameters.Add("?pChannelId", MySqlDbType.VarChar, 40).Value = ctx.Channel.Id;
+                    connection.Open();
+                    var reader = command.ExecuteReader();
+
+                    if (reader.HasRows)
+                    {
+                        while (reader.NextResult())
+                        {
+                            queueOwnerId = reader.GetUInt64("queueOwner");
+                        }
+                    }
+                }
+
+                if (queueOwnerId == 0)
+                {
+                    await ctx.Channel.SendMessageAsync("Could not find an owner for this queue channel").ConfigureAwait(false);
+                    return;
+                }
+                DiscordMember queueOwner = await ctx.Guild.GetMemberAsync(queueOwnerId).ConfigureAwait(false);
+                if (discordIds.Count < 1)
+                {
+                    await ctx.Channel.SendMessageAsync("Currently no one waiting in your queue or on island").ConfigureAwait(false);
+                }
+                else
+                {
+                    foreach (ulong id in discordIds)
+                    {
+                        var user = await ctx.Guild.GetMemberAsync(id).ConfigureAwait(false);
+                        var userDmChannel = await user.CreateDmChannelAsync().ConfigureAwait(false);
+                        await userDmChannel.SendMessageAsync($"Message from {queueOwner.DisplayName}: {message}").ConfigureAwait(false);
+                    }
+                    await ctx.Channel.SendMessageAsync($"Sent your message to the {discordIds.Count} members in your queue").ConfigureAwait(false);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.Out.WriteLine(ex.Message);
+                Console.Out.WriteLine(ex.StackTrace);
             }
         }
 
@@ -113,13 +199,13 @@ namespace ThePathBot.Commands.QueueCommands
                     await daisyNooksMessage.CreateReactionAsync(nooks).ConfigureAwait(false);
 
                     var daisyOrNooks = await interactivity.WaitForReactionAsync(react => (react.Emoji == daisy ||
-                    react.Emoji == nooks) && react.User == ctx.User, TimeSpan.FromMinutes(2)).ConfigureAwait(false);
+                    react.Emoji == nooks) && react.User == ctx.User, TimeSpan.FromMinutes(5)).ConfigureAwait(false);
                     isDaisy = daisyOrNooks.Result.Emoji == daisy;
 
                     bool responseCorrect = true;
                     await newChannel.SendMessageAsync("Enter your Dodo Code").ConfigureAwait(false);
 
-                    var msg = await interactivity.WaitForMessageAsync(x => x.Channel == newChannel && x.Author == ctx.Member).ConfigureAwait(false);
+                    var msg = await interactivity.WaitForMessageAsync(x => x.Channel == newChannel && x.Author == ctx.Member, TimeSpan.FromMinutes(5)).ConfigureAwait(false);
 
                     dodoCode = msg.Result.Content;
                     if (msg.Result.Content.ToLower() == "cancel")
@@ -135,7 +221,7 @@ namespace ThePathBot.Commands.QueueCommands
 
                     await newChannel.SendMessageAsync("Enter your price").ConfigureAwait(false);
 
-                    msg = await interactivity.WaitForMessageAsync(x => x.Channel == newChannel && x.Author == ctx.Member).ConfigureAwait(false);
+                    msg = await interactivity.WaitForMessageAsync(x => x.Channel == newChannel && x.Author == ctx.Member, TimeSpan.FromMinutes(5)).ConfigureAwait(false);
 
                     turnipPrice = msg.Result.Content;
 
@@ -152,7 +238,7 @@ namespace ThePathBot.Commands.QueueCommands
 
                     await newChannel.SendMessageAsync("Enter session message for your guests").ConfigureAwait(false);
 
-                    msg = await interactivity.WaitForMessageAsync(x => x.Channel == newChannel && x.Author == ctx.Member).ConfigureAwait(false);
+                    msg = await interactivity.WaitForMessageAsync(x => x.Channel == newChannel && x.Author == ctx.Member, TimeSpan.FromMinutes(5)).ConfigureAwait(false);
 
                     if (msg.Result.Content.ToLower() == "cancel")
                     {
@@ -163,7 +249,7 @@ namespace ThePathBot.Commands.QueueCommands
 
                     await newChannel.SendMessageAsync("Enter how many people you want per group (max of 7)").ConfigureAwait(false);
 
-                    msg = await interactivity.WaitForMessageAsync(x => x.Channel == newChannel && x.Author == ctx.Member).ConfigureAwait(false);
+                    msg = await interactivity.WaitForMessageAsync(x => x.Channel == newChannel && x.Author == ctx.Member, TimeSpan.FromMinutes(5)).ConfigureAwait(false);
 
                     maxGroupSize = msg.Result.Content;
 
@@ -180,7 +266,7 @@ namespace ThePathBot.Commands.QueueCommands
 
                     await newChannel.SendMessageAsync("Please send a photo of your price").ConfigureAwait(false);
 
-                    var attachmentMsg = await interactivity.WaitForMessageAsync(x => x.Channel == newChannel && x.Author == ctx.Member && x.Attachments.Count > 0).ConfigureAwait(false);
+                    var attachmentMsg = await interactivity.WaitForMessageAsync(x => x.Channel == newChannel && x.Author == ctx.Member && x.Attachments.Count > 0, TimeSpan.FromMinutes(5)).ConfigureAwait(false);
 
                     attachment = attachmentMsg.Result.Attachments[0].Url;
 
@@ -217,7 +303,7 @@ namespace ThePathBot.Commands.QueueCommands
                         await sentMessage.CreateReactionAsync(no).ConfigureAwait(false);
 
                         var response = await interactivity.WaitForReactionAsync(xe => xe.Emoji == yes || xe.Emoji == no,
-                            sentMessage, ctx.User, TimeSpan.FromMinutes(1)).ConfigureAwait(false);
+                            sentMessage, ctx.User, TimeSpan.FromMinutes(5)).ConfigureAwait(false);
 
                         if (response.Result.Emoji == yes)
                         {
@@ -514,10 +600,10 @@ namespace ThePathBot.Commands.QueueCommands
                 List<ulong> discordIds = new List<ulong>();
                 using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
                 {
-                    query = "SELECT dodoCode, message, maxVisitorsAtOnce from pathQueues WHERE privateChannelID = ?channelid AND queueOwner = ?owner AND active = 1";
+                    query = "SELECT dodoCode, message, maxVisitorsAtOnce from pathQueues WHERE privateChannelID = ?channelid AND active = 1";
                     command = new MySqlCommand(query, connection);
                     command.Parameters.Add("?channelid", MySqlDbType.VarChar, 40).Value = ctx.Channel.Id;
-                    command.Parameters.Add("?owner", MySqlDbType.VarChar, 40).Value = ctx.Member.Id;
+                    //command.Parameters.Add("?owner", MySqlDbType.VarChar, 40).Value = ctx.Member.Id;
                     connection.Open();
                     var reader = command.ExecuteReader();
                     if (!reader.HasRows)
@@ -696,6 +782,7 @@ namespace ThePathBot.Commands.QueueCommands
                     connection.Open();
                     command.ExecuteNonQuery();
                 }
+                ulong msgId = GetQueueMessageIdFromPrivateChannelId(ctx.Channel.Id);
 
                 var msg = await ctx.Channel.SendMessageAsync($"Dodo code is now updated to {newcode}").ConfigureAwait(false);
                 StartTimer(msg);
@@ -1303,6 +1390,7 @@ namespace ThePathBot.Commands.QueueCommands
             int groupNumber = 1;
             int positionInGroup = 1;
             bool firstPerson = false;
+            bool isOnisland = false;
             using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
             {
                 string query = "SELECT * FROM pathQueuers WHERE queueChannelID = ?queueChannelID AND visited = 0 " +
@@ -1318,6 +1406,7 @@ namespace ThePathBot.Commands.QueueCommands
                     {
                         groupNumber = reader.GetInt32("GroupNumber");
                         positionInGroup = reader.GetInt32("PlaceInGroup");
+                        isOnisland = reader.GetBoolean("onisland");
                     }
                 }
                 reader.Close();
@@ -1329,6 +1418,11 @@ namespace ThePathBot.Commands.QueueCommands
             }
 
             if (positionInGroup >= maxInGroup)
+            {
+                groupNumber++;
+                positionInGroup = 1;
+            }
+            else if (isOnisland)
             {
                 groupNumber++;
                 positionInGroup = 1;
