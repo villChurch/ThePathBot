@@ -102,7 +102,7 @@ namespace ThePathBot.Commands.QueueCommands
 
                     if (reader.HasRows)
                     {
-                        while (reader.NextResult())
+                        while (reader.Read())
                         {
                             discordIds.Add(reader.GetUInt64("DiscordID"));
                         }
@@ -119,7 +119,7 @@ namespace ThePathBot.Commands.QueueCommands
 
                     if (reader.HasRows)
                     {
-                        while (reader.NextResult())
+                        while (reader.Read())
                         {
                             queueOwnerId = reader.GetUInt64("queueOwner");
                         }
@@ -827,7 +827,7 @@ namespace ThePathBot.Commands.QueueCommands
                     var reader = command.ExecuteReader();
                     if (reader.HasRows)
                     {
-                        while (reader.NextResult())
+                        while (reader.Read())
                         {
                             msgId = reader.GetUInt64("embedMessageID");
                             turnipPrice = reader.GetString("turnipPrice");
@@ -897,7 +897,7 @@ namespace ThePathBot.Commands.QueueCommands
                 var reader = command.ExecuteReader();
                 if (reader.HasRows)
                 {
-                    while(reader.NextResult())
+                    while(reader.Read())
                     {
                         discordIds.Add(reader.GetUInt64("DiscordID"));
                     }

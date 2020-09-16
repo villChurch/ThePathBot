@@ -239,7 +239,7 @@ namespace ThePathBot
                         {
                             Title = "Wrong number!",
                             Color = DiscordColor.Red,
-                            Description = $"{member.DisplayName} has enetered the wrong number! Start again from 1"
+                            Description = $"{member.DisplayName} has entered the wrong number! Start again from 1"
                         };
                         countNumber = 0;
                         LastCountId = 0;
