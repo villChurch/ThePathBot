@@ -173,9 +173,9 @@ namespace ThePathBot.Commands.QueueCommands
                 }
                 //first we must create a private channel
                 Guid guid = Guid.NewGuid();
-                var newChannel = await ctx.Guild.CreateChannelAsync(guid.ToString(), DSharpPlus.ChannelType.Text, ctx.Guild.GetChannel(privateChannelGroup));
+                var newChannel = await ctx.Guild.CreateChannelAsync(guid.ToString(), ChannelType.Text, ctx.Guild.GetChannel(privateChannelGroup));
                 //Then give the user access to the channel
-                await newChannel.AddOverwriteAsync(ctx.Member, DSharpPlus.Permissions.AccessChannels);
+                await newChannel.AddOverwriteAsync(ctx.Member, Permissions.AccessChannels);
 
                 // Now we can get some information
                 bool ready = false;
@@ -317,7 +317,7 @@ namespace ThePathBot.Commands.QueueCommands
                 }
                 var dodoMsg = await newChannel.SendMessageAsync(embed: sessionEmbed).ConfigureAwait(false);
 
-                CreateQueueEmbed(turnipPrice, ctx, newChannel, attachment, maxGroupSize, dodoCode, message, isDaisy);
+                CreateQueueEmbed(turnipPrice, ctx, newChannel, attachment, maxGroupSize, dodoCode, message, isDaisy, dodoMsg);
                 int.TryParse(turnipPrice, out int tprice);
                 if (ctx.Guild.Id == 744699540212416592 && tprice >= 500)
                 {
@@ -783,8 +783,60 @@ namespace ThePathBot.Commands.QueueCommands
                     command.ExecuteNonQuery();
                 }
                 ulong msgId = GetQueueMessageIdFromPrivateChannelId(ctx.Channel.Id);
+                string turnipPrice = "", message = "", maxGroupSize = "";
+                bool isDaisy = false;
+                using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
+                {
+                    string query = "Select embedMessageID, daisy, turnipPrice, message, maxGroupSize from pathQueueMessage" +
+                        " where privateChannelID = ?pChannelId";
+                    var command = new MySqlCommand(query, connection);
+                    command.Parameters.Add("?pChannelId", MySqlDbType.VarChar, 40).Value = ctx.Channel.Id;
+                    connection.Open();
+                    var reader = command.ExecuteReader();
+                    if (reader.HasRows)
+                    {
+                        while (reader.NextResult())
+                        {
+                            msgId = reader.GetUInt64("embedMessageID");
+                            turnipPrice = reader.GetString("turnipPrice");
+                            message = reader.GetString("message");
+                            maxGroupSize = reader.GetString("maxGroupSize");
+                        }
+                    }
+                }
 
-                var msg = await ctx.Channel.SendMessageAsync($"Dodo code is now updated to {newcode}").ConfigureAwait(false);
+                if (string.IsNullOrEmpty(turnipPrice))
+                {
+                    return;
+                }
+
+                StringBuilder sb = new StringBuilder();
+                sb.AppendLine($"Dodo Code: {newcode}");
+                if (isDaisy)
+                {
+                    sb.AppendLine($"Daisy Price: {turnipPrice}");
+                }
+                else
+                {
+                    sb.AppendLine($"Turnip Price: {turnipPrice}");
+                }
+                sb.AppendLine($"Session Message: {message}");
+                sb.AppendLine($"Group Size: {maxGroupSize}");
+                sb.AppendLine($"If this information is correct press the :white_check_mark: otherwise press :x: to start again.");
+
+                var oldEmbed = await ctx.Channel.GetMessageAsync(msgId).ConfigureAwait(false);
+                var embed = new DiscordEmbedBuilder
+                {
+                    Title = oldEmbed.Embeds[0].Title,
+                    Url = oldEmbed.Embeds[0].Url.ToString()
+                };
+                embed.Description = sb.ToString();
+
+                DiscordEmbed newEmbed = embed;
+                await oldEmbed.ModifyAsync(embed: newEmbed).ConfigureAwait(false);
+                await ResendCodeToOnIslandPeeps(ctx, ctx.Channel.Id, newcode);
+                var msg = await ctx.Channel.SendMessageAsync($"Dodo code is now updated to {newcode} and the new code has been sent to everyone on island")
+                    .ConfigureAwait(false);
                 StartTimer(msg);
             }
             catch (Exception ex)
@@ -798,6 +850,38 @@ namespace ThePathBot.Commands.QueueCommands
             finally
             {
                 await ctx.Channel.DeleteMessageAsync(ctx.Message).ConfigureAwait(false);
+            }
+        }
+
+        private async Task ResendCodeToOnIslandPeeps(CommandContext ctx, ulong channelId, string dodoCode)
+        {
+            List<ulong> discordIds = new List<ulong>();
+            using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
+            {
+                string query = "Select DiscordID from pathQueuers WHERE onisland = 1 AND visited = 0 and queueChannelID = ?channelId";
+                var command = new MySqlCommand(query, connection);
+                command.Parameters.Add("?channelId", MySqlDbType.VarChar, 40).Value = channelId;
+                connection.Open();
+                var reader = command.ExecuteReader();
+                if (reader.HasRows)
+                {
+                    while(reader.NextResult())
+                    {
+                        discordIds.Add(reader.GetUInt64("DiscordID"));
+                    }
+                }
+            }
+            if (discordIds.Count < 1)
+            {
+                return;
+            }
+
+            foreach (ulong id in discordIds)
+            {
+                var member = await ctx.Guild.GetMemberAsync(id);
+                var dmChannel = await member.CreateDmChannelAsync();
+                await dmChannel.SendMessageAsync($"The dodo code for the queue has changed to {dodoCode}. " +
+                    $"If you have problems connection please try this new code").ConfigureAwait(false);
             }
         }
 
@@ -1228,7 +1312,7 @@ namespace ThePathBot.Commands.QueueCommands
         }
 
         private async void CreateQueueEmbed(string turnipPrice, CommandContext ctx, DiscordChannel channel, string attachment,
-            string maxSize, string dodoCode, string message, bool isDaisy)
+            string maxSize, string dodoCode, string message, bool isDaisy, DiscordMessage embedMessage)
         {
             try
             {
@@ -1248,8 +1332,36 @@ namespace ThePathBot.Commands.QueueCommands
                 var postChannel = ctx.Guild.GetChannel(postChannelId);
                 var queueMsg = await postChannel.SendMessageAsync(embed: queueEmbed).ConfigureAwait(false);
 
+                InsertQueueEmbedIntoDB(channel.Id, embedMessage.Id, isDaisy, turnipPrice, message, maxSize);
                 InsertQueueIntoDBAsync(ctx.User.Id, queueMsg.Id, channel.Id, int.Parse(maxSize), dodoCode, sessionCode, message, isDaisy);
 
+            }
+            catch (Exception ex)
+            {
+                Console.Out.WriteLine(ex.Message);
+                Console.Out.WriteLine(ex.StackTrace);
+            }
+        }
+
+        private void InsertQueueEmbedIntoDB(ulong privateChannelId, ulong embedMessageId, bool isDaisy, string turnipPrice,
+            string message, string maxGroupSize)
+        {
+            try
+            {
+                using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
+                {
+                    string query = "INSERT INTO pathQueueMessage (privateChannelID, embedMessageID, daisy, turnipPrice, message, maxGroupSize)" +
+                        " VALUES (?channelId, ?embedId, ?daisy, ?turnipPrice, ?message, ?maxGroupSize)";
+                    var command = new MySqlCommand(query, connection);
+                    command.Parameters.Add("?channelId", MySqlDbType.VarChar, 40).Value = privateChannelId;
+                    command.Parameters.Add("?embedId", MySqlDbType.VarChar, 40).Value = embedMessageId;
+                    command.Parameters.Add("?daisy", MySqlDbType.Int16).Value = isDaisy;
+                    command.Parameters.Add("?turnipPrice", MySqlDbType.VarChar, 4).Value = turnipPrice;
+                    command.Parameters.Add("?message", MySqlDbType.VarChar).Value = message;
+                    command.Parameters.Add("?maxGroupSize", MySqlDbType.VarChar, 2).Value = maxGroupSize;
+                    connection.Open();
+                    command.ExecuteNonQuery();
+                }
             }
             catch (Exception ex)
             {
