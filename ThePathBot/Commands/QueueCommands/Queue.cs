@@ -754,6 +754,38 @@ namespace ThePathBot.Commands.QueueCommands
             }
         }
 
+        [Command("updatemessage")]
+        [Description("update your queues message")]
+        public async Task UpdateQueueMessage(CommandContext ctx, [Description("new queue message"), RemainingText] string message)
+        {
+            if (ctx.Channel.Parent.Id != privateChannelGroup)
+            {
+                var msg = await ctx.Channel.SendMessageAsync("You can only run this command from a private queue channel").ConfigureAwait(false);
+                StartTimer(msg);
+                return;
+            }
+            try
+            {
+                using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
+                {
+                    string query = "UPDATE pathQueues SET message = ?message WHERE privateChannelID = ?channelId";
+                    var command = new MySqlCommand(query, connection);
+                    command.Parameters.Add("?message", MySqlDbType.VarChar).Value = message;
+                    command.Parameters.Add("?channelId", MySqlDbType.VarChar, 40).Value = ctx.Channel.Id;
+                    connection.Open();
+                    command.ExecuteNonQuery();
+                }
+
+                await ctx.Channel.SendMessageAsync($"Message now updated to: {message}").ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                await ctx.Channel.SendMessageAsync("Could not update message at this point in time").ConfigureAwait(false);
+                Console.Out.WriteLine(ex.Message);
+                Console.Out.WriteLine(ex.StackTrace);
+            }
+        }
+
         [Command("updatedodo")]
         [Aliases("updatecode")]
         [Hidden]
