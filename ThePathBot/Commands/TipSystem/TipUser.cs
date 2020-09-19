@@ -261,131 +261,139 @@ namespace ThePathBot.Commands.TipSystem
 
         private async void UpdateRoles(int newTotal, ulong user, CommandContext ctx)
         {
-            if (ctx.Guild.Id != 744699540212416592)
+            try
             {
-                return;
-            }
-            await SendCongratulationMessage(newTotal, user, ctx);
-            DiscordMember recipient = await ctx.Guild.GetMemberAsync(user);
-            IEnumerable<DiscordRole> userRoles = recipient.Roles;
-            var Tip25Role = ctx.Guild.GetRole(749452392201715723);
-            var Tip75Role = ctx.Guild.GetRole(749452452155359243);
-            var Tip150Role = ctx.Guild.GetRole(749452611593437195);
-            var Tip300Role = ctx.Guild.GetRole(749452682267459614);
-            var Tip750Role = ctx.Guild.GetRole(749452738802483290);
-
-            if (newTotal >= 25)
-            {
-                var TipRole = ctx.Guild.GetRole(749452392201715723);
-                if (!userRoles.Contains(TipRole))
+                if (ctx.Guild.Id != 744699540212416592)
                 {
-                    await recipient.GrantRoleAsync(TipRole, "Reached 25 tips or more").ConfigureAwait(false);
+                    return;
                 }
-            }
-            if (newTotal >= 75)
-            {
-                var TipRole = ctx.Guild.GetRole(749452452155359243);
-                if (!userRoles.Contains(TipRole))
+                await SendCongratulationMessage(newTotal, user, ctx);
+                DiscordMember recipient = await ctx.Guild.GetMemberAsync(user);
+                IEnumerable<DiscordRole> userRoles = recipient.Roles;
+                var Tip25Role = ctx.Guild.GetRole(749452392201715723);
+                var Tip75Role = ctx.Guild.GetRole(749452452155359243);
+                var Tip150Role = ctx.Guild.GetRole(749452611593437195);
+                var Tip300Role = ctx.Guild.GetRole(749452682267459614);
+                var Tip750Role = ctx.Guild.GetRole(749452738802483290);
+
+                if (newTotal == 25)
                 {
-                    await recipient.GrantRoleAsync(TipRole, "Reached 75 tips or more").ConfigureAwait(false);
+                    var TipRole = ctx.Guild.GetRole(749452392201715723);
+                    if (!userRoles.Contains(TipRole))
+                    {
+                        await recipient.GrantRoleAsync(TipRole, "Reached 25 tips or more").ConfigureAwait(false);
+                    }
+                }
+                if (newTotal == 75)
+                {
+                    var TipRole = ctx.Guild.GetRole(749452452155359243);
+                    if (!userRoles.Contains(TipRole))
+                    {
+                        await recipient.GrantRoleAsync(TipRole, "Reached 75 tips or more").ConfigureAwait(false);
+                        if (userRoles.Contains(Tip25Role))
+                        {
+                            await recipient.RevokeRoleAsync(Tip25Role).ConfigureAwait(false);
+                        }
+                    }
+                }
+                if (newTotal == 150)
+                {
+                    var TipRole = ctx.Guild.GetRole(749452611593437195);
+                    if (!userRoles.Contains(TipRole))
+                    {
+                        await recipient.GrantRoleAsync(TipRole, "Reached 150 tips or more").ConfigureAwait(false);
+                    }
+                    TipRole = ctx.Guild.GetRole(visitingMerchantRoleId);
+                    if (!userRoles.Contains(TipRole))
+                    {
+                        await recipient.GrantRoleAsync(TipRole, "Giving Visiting Merchant as user has 150 or above tips").ConfigureAwait(false);
+                    }
                     if (userRoles.Contains(Tip25Role))
                     {
-                        await recipient.RevokeRoleAsync(Tip25Role).ConfigureAwait(false);
+                        await recipient.RevokeRoleAsync(Tip25Role);
+                    }
+                    if (userRoles.Contains(Tip75Role))
+                    {
+                        await recipient.RevokeRoleAsync(Tip75Role);
+                    }
+                }
+                if (newTotal == 300)
+                {
+                    var TipRole = ctx.Guild.GetRole(749452682267459614);
+                    if (!userRoles.Contains(TipRole))
+                    {
+                        await recipient.GrantRoleAsync(TipRole, "Reached 300 tips or more").ConfigureAwait(false);
+                    }
+                    if (userRoles.Contains(Tip25Role))
+                    {
+                        await recipient.RevokeRoleAsync(Tip25Role);
+                    }
+                    if (userRoles.Contains(Tip75Role))
+                    {
+                        await recipient.RevokeRoleAsync(Tip75Role);
+                    }
+                    if (userRoles.Contains(Tip150Role))
+                    {
+                        await recipient.RevokeRoleAsync(Tip150Role);
+                    }
+                }
+                if (newTotal == 750)
+                {
+                    var TipRole = ctx.Guild.GetRole(749452738802483290);
+                    if (!userRoles.Contains(TipRole))
+                    {
+                        await recipient.GrantRoleAsync(TipRole, "Reached 750 tips or more").ConfigureAwait(false);
+                    }
+                    if (userRoles.Contains(Tip25Role))
+                    {
+                        await recipient.RevokeRoleAsync(Tip25Role);
+                    }
+                    if (userRoles.Contains(Tip75Role))
+                    {
+                        await recipient.RevokeRoleAsync(Tip75Role);
+                    }
+                    if (userRoles.Contains(Tip150Role))
+                    {
+                        await recipient.RevokeRoleAsync(Tip150Role);
+                    }
+                    if (userRoles.Contains(Tip300Role))
+                    {
+                        await recipient.RevokeRoleAsync(Tip300Role);
+                    }
+                }
+                if (newTotal == 1500)
+                {
+                    var TipRole = ctx.Guild.GetRole(749452794691452998);
+                    if (!userRoles.Contains(TipRole))
+                    {
+                        await recipient.GrantRoleAsync(TipRole, "Reached 1500 tips or more").ConfigureAwait(false);
+                    }
+                    if (userRoles.Contains(Tip25Role))
+                    {
+                        await recipient.RevokeRoleAsync(Tip25Role);
+                    }
+                    if (userRoles.Contains(Tip75Role))
+                    {
+                        await recipient.RevokeRoleAsync(Tip75Role);
+                    }
+                    if (userRoles.Contains(Tip150Role))
+                    {
+                        await recipient.RevokeRoleAsync(Tip150Role);
+                    }
+                    if (userRoles.Contains(Tip300Role))
+                    {
+                        await recipient.RevokeRoleAsync(Tip300Role);
+                    }
+                    if (userRoles.Contains(Tip750Role))
+                    {
+                        await recipient.RevokeRoleAsync(Tip750Role);
                     }
                 }
             }
-            if (newTotal >= 150)
+            catch (Exception ex)
             {
-                var TipRole = ctx.Guild.GetRole(749452611593437195);
-                if (!userRoles.Contains(TipRole))
-                {
-                    await recipient.GrantRoleAsync(TipRole, "Reached 150 tips or more").ConfigureAwait(false);
-                }
-                TipRole = ctx.Guild.GetRole(visitingMerchantRoleId);
-                if (!userRoles.Contains(TipRole))
-                {
-                    await recipient.GrantRoleAsync(TipRole, "Giving Visiting Merchant as user has 150 or above tips").ConfigureAwait(false);
-                }
-                if (userRoles.Contains(Tip25Role))
-                {
-                    await recipient.RevokeRoleAsync(Tip25Role);
-                }
-                if (userRoles.Contains(Tip75Role))
-                {
-                    await recipient.RevokeRoleAsync(Tip75Role);
-                }
-            }
-            if (newTotal >= 300)
-            {
-                var TipRole = ctx.Guild.GetRole(749452682267459614);
-                if (!userRoles.Contains(TipRole))
-                {
-                    await recipient.GrantRoleAsync(TipRole, "Reached 300 tips or more").ConfigureAwait(false);
-                }
-                if (userRoles.Contains(Tip25Role))
-                {
-                    await recipient.RevokeRoleAsync(Tip25Role);
-                }
-                if (userRoles.Contains(Tip75Role))
-                {
-                    await recipient.RevokeRoleAsync(Tip75Role);
-                }
-                if (userRoles.Contains(Tip150Role))
-                {
-                    await recipient.RevokeRoleAsync(Tip150Role);
-                }
-            }
-            if (newTotal >= 750)
-            {
-                var TipRole = ctx.Guild.GetRole(749452738802483290);
-                if (!userRoles.Contains(TipRole))
-                {
-                    await recipient.GrantRoleAsync(TipRole, "Reached 750 tips or more").ConfigureAwait(false);
-                }
-                if (userRoles.Contains(Tip25Role))
-                {
-                    await recipient.RevokeRoleAsync(Tip25Role);
-                }
-                if (userRoles.Contains(Tip75Role))
-                {
-                    await recipient.RevokeRoleAsync(Tip75Role);
-                }
-                if (userRoles.Contains(Tip150Role))
-                {
-                    await recipient.RevokeRoleAsync(Tip150Role);
-                }
-                if (userRoles.Contains(Tip300Role))
-                {
-                    await recipient.RevokeRoleAsync(Tip300Role);
-                }
-            }
-            if (newTotal >= 1500)
-            {
-                var TipRole = ctx.Guild.GetRole(749452794691452998);
-                if (!userRoles.Contains(TipRole))
-                {
-                    await recipient.GrantRoleAsync(TipRole, "Reached 1500 tips or more").ConfigureAwait(false);
-                }
-                if (userRoles.Contains(Tip25Role))
-                {
-                    await recipient.RevokeRoleAsync(Tip25Role);
-                }
-                if (userRoles.Contains(Tip75Role))
-                {
-                    await recipient.RevokeRoleAsync(Tip75Role);
-                }
-                if (userRoles.Contains(Tip150Role))
-                {
-                    await recipient.RevokeRoleAsync(Tip150Role);
-                }
-                if (userRoles.Contains(Tip300Role))
-                {
-                    await recipient.RevokeRoleAsync(Tip300Role);
-                }
-                if (userRoles.Contains(Tip750Role))
-                {
-                    await recipient.RevokeRoleAsync(Tip750Role);
-                }
+                Console.Out.WriteLine(ex.Message);
+                Console.Out.WriteLine(ex.StackTrace);
             }
         }
 

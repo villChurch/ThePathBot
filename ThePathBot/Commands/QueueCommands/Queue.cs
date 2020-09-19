@@ -897,7 +897,7 @@ namespace ThePathBot.Commands.QueueCommands
                 var reader = command.ExecuteReader();
                 if (reader.HasRows)
                 {
-                    while(reader.Read())
+                    while (reader.Read())
                     {
                         discordIds.Add(reader.GetUInt64("DiscordID"));
                     }
