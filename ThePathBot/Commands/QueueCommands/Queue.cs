@@ -45,6 +45,9 @@ namespace ThePathBot.Commands.QueueCommands
 
         private async void DestructMessage(object source, ElapsedEventArgs e, DiscordMessage msg)
         {
+            msgDestructTimer.Stop();
+            msgDestructTimer.Dispose();
+            msgDestructTimer.Enabled = false;
             try
             {
                 await msg.DeleteAsync();
@@ -53,11 +56,6 @@ namespace ThePathBot.Commands.QueueCommands
             {
                 Console.Out.WriteLine(ex.Message);
                 Console.Out.WriteLine(ex.StackTrace);
-            }
-            finally
-            {
-                msgDestructTimer.Stop();
-                msgDestructTimer.Dispose();
             }
         }
         [Command("queuehelp")]

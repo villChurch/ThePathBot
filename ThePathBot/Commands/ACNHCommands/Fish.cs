@@ -158,135 +158,51 @@ namespace ThePathBot.Commands.ACNHCommands
         {
             if (inputMonth.ToLower() == "january")
             {
-                if (hemi.ToLower() == "nh")
-                {
-                    return fishy.NhJan;
-                }
-                else
-                {
-                    return fishy.ShJan;
-                }
+                return hemi.ToLower() == "nh" ? fishy.NhJan : fishy.ShJan;
             }
             else if (inputMonth.ToLower() == "february")
             {
-                if (hemi.ToLower() == "nh")
-                {
-                    return fishy.NhFeb;
-                }
-                else
-                {
-                    return fishy.ShFeb;
-                }
+                return hemi.ToLower() == "nh" ? fishy.NhFeb : fishy.ShFeb;
             }
             else if (inputMonth.ToLower() == "march")
             {
-                if (hemi.ToLower() == "nh")
-                {
-                    return fishy.NhMar;
-                }
-                else
-                {
-                    return fishy.ShMar;
-                }
+                return hemi.ToLower() == "nh" ? fishy.NhMar : fishy.ShMar;
             }
             else if (inputMonth.ToLower() == "april")
             {
-                if (hemi.ToLower() == "nh")
-                {
-                    return fishy.NhApr;
-                }
-                else
-                {
-                    return fishy.ShApr;
-                }
+                return hemi.ToLower() == "nh" ? fishy.NhApr : fishy.ShApr;
             }
             else if (inputMonth.ToLower() == "may")
             {
-                if (hemi.ToLower() == "nh")
-                {
-                    return fishy.NhMay;
-                }
-                else
-                {
-                    return fishy.ShMay;
-                }
+                return hemi.ToLower() == "nh" ? fishy.NhMay : fishy.ShMay;
             }
             else if (inputMonth.ToLower() == "june")
             {
-                if (hemi.ToLower() == "nh")
-                {
-                    return fishy.NhJun;
-                }
-                else
-                {
-                    return fishy.ShJun;
-                }
+                return hemi.ToLower() == "nh" ? fishy.NhJun : fishy.ShJun;
             }
             else if (inputMonth.ToLower() == "july")
             {
-                if (hemi.ToLower() == "nh")
-                {
-                    return fishy.NhJul;
-                }
-                else
-                {
-                    return fishy.ShJul;
-                }
+                return hemi.ToLower() == "nh" ? fishy.NhJul : fishy.ShJul;
             }
             else if (inputMonth.ToLower() == "august")
             {
-                if (hemi.ToLower() == "nh")
-                {
-                    return fishy.NhAug;
-                }
-                else
-                {
-                    return fishy.ShAug;
-                }
+                return hemi.ToLower() == "nh" ? fishy.NhAug : fishy.ShAug;
             }
             else if (inputMonth.ToLower() == "september")
             {
-                if (hemi.ToLower() == "nh")
-                {
-                    return fishy.NhSep;
-                }
-                else
-                {
-                    return fishy.ShSep;
-                }
+                return hemi.ToLower() == "nh" ? fishy.NhSep : fishy.ShSep;
             }
             else if (inputMonth.ToLower() == "october")
             {
-                if (hemi.ToLower() == "nh")
-                {
-                    return fishy.NhOct;
-                }
-                else
-                {
-                    return fishy.ShOct;
-                }
+                return hemi.ToLower() == "nh" ? fishy.NhOct : fishy.ShOct;
             }
             else if (inputMonth.ToLower() == "november")
             {
-                if (hemi.ToLower() == "nh")
-                {
-                    return fishy.NhNov;
-                }
-                else
-                {
-                    return fishy.ShNov;
-                }
+                return hemi.ToLower() == "nh" ? fishy.NhNov : fishy.ShNov;
             }
             else if (inputMonth.ToLower() == "december")
             {
-                if (hemi.ToLower() == "nh")
-                {
-                    return fishy.NhDec;
-                }
-                else
-                {
-                    return fishy.ShDec;
-                }
+                return hemi.ToLower() == "nh" ? fishy.NhDec : fishy.ShDec;
             }
             else
             {
