@@ -325,7 +325,7 @@ namespace ThePathBot.Commands.QueueCommands
                     var turnipRoleEmbed = new DiscordEmbedBuilder
                     {
                         Title = $"High turnip price at nooks",
-                        Description = $"{Formatter.Mention(turnipRole)} {Formatter.Mention(ctx.User, true)} is hosting a high price of" +
+                        Description = $"{turnipRole.Mention} {ctx.User.Mention} is hosting a high price of" +
                         $" {turnipPrice}. See {Formatter.Mention(turnipChannel)} for information on how to join.",
                         Color = DiscordColor.Aquamarine
                     };
@@ -958,8 +958,8 @@ namespace ThePathBot.Commands.QueueCommands
                 };
                 await message.DeleteAsync();
                 MakeQueueActive(ctx.Channel.Id);
-                var newMsg = await ctx.Guild.GetChannel(channelToSearch).SendMessageAsync(embed: newEmbed).ConfigureAwait(false);
-                UpdateMessageID(ctx.Channel.Id, newMsg.Id);
+                await ctx.Guild.GetChannel(channelToSearch).SendMessageAsync(embed: newEmbed).ConfigureAwait(false); // var newMsg = 
+                //UpdateMessageID(ctx.Channel.Id, newMsg.Id);
                 await ctx.Channel.SendMessageAsync("Queue has been resumed").ConfigureAwait(false); 
             }
             catch (Exception ex)

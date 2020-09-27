@@ -72,6 +72,68 @@ namespace ThePathBot.Commands.ACNHCommands
             await ctx.Channel.SendMessageAsync(embed: villagerEmbed).ConfigureAwait(false);
         }
 
+        [Command("personality")]
+        [Description("Gets a list of villagers with that personaltiy")]
+        public async Task Personality(CommandContext ctx, [RemainingText, Description("personality to search for")] string personality)
+        {
+            try
+            {
+                List<VillagerModel> villagers = new List<VillagerModel>();
+                using (var httpClient = new HttpClient())
+                {
+                    var url = $"https://nooksinfo.com/villager/personality/{personality}";
+                    Task<HttpResponseMessage> getResponse = httpClient.GetAsync(url);
+                    HttpResponseMessage response = await getResponse;
+                    var responseJsonString = await response.Content.ReadAsStringAsync();
+                    Console.Out.WriteLine(responseJsonString);
+                    if (responseJsonString.Length < 1)
+                    {
+                        await ctx.Channel.SendMessageAsync($"Could not find any villagers with personality of {personality}").ConfigureAwait(false);
+                        return;
+                    }
+                    else if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
+                    {
+                        await ctx.Channel.SendMessageAsync($"{response.Content.ReadAsStringAsync().Result}");
+                        return;
+                    }
+                    villagers = JsonConvert.DeserializeObject<List<VillagerModel>>(responseJsonString);
+                }
+                List<Page> pages = new List<Page>();
+                int count = 1;
+                foreach (var villager in villagers)
+                {
+                    Page page = new Page();
+                    var embed = new DiscordEmbedBuilder
+                    {
+                        Title = villager.Name,
+                        Color = DiscordColor.Blurple,
+                        ImageUrl = "http://williamspires.com/villagers/" + villager.Filename + ".png",
+                        Footer = new DiscordEmbedBuilder.EmbedFooter
+                        {
+                            Text = $"Villager {count}/{villagers.Count}"
+                        }
+                    };
+                    embed.AddField("Species", villager.Species, true);
+                    embed.AddField("Gender", villager.Gender, true);
+                    embed.AddField("Birthday", villager.Birthday, true);
+                    embed.AddField("Catchphrase", villager.Catchphrase, true);
+                    page.Embed = embed;
+                    page.Content = $"Villagers with {personality} personality";
+                    pages.Add(page);
+                    count++;
+                }
+                InteractivityExtension interactivity = ctx.Client.GetInteractivity();
+
+                await interactivity.SendPaginatedMessageAsync(ctx.Channel, ctx.User, pages)
+                    .ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Console.Out.WriteLine(ex.Message);
+                Console.Out.WriteLine(ex.StackTrace);
+            }
+        }
+
         [Command("birthday")]
         [Aliases("bday")]
         [Description("Gets todays birthdays using UTC time zone")]
