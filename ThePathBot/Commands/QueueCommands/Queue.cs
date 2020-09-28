@@ -32,24 +32,27 @@ namespace ThePathBot.Commands.QueueCommands
             Color = DiscordColor.Blurple
         };
 
-        private void StartTimer(DiscordMessage msg)
+        private void StartTimer(DiscordClient client, ulong guildId, ulong channelId, ulong messageId)
         {
             msgDestructTimer = new Timer
             {
                 Interval = 5000 // 5 seconds
             };
-            msgDestructTimer.Elapsed += (sender, e) => DestructMessage(sender, e, msg);
+            msgDestructTimer.Elapsed += (sender, e) => DestructMessage(sender, e, client, guildId, channelId, messageId);
             msgDestructTimer.AutoReset = true;
             msgDestructTimer.Enabled = true;
         }
 
-        private async void DestructMessage(object source, ElapsedEventArgs e, DiscordMessage msg)
+        private async void DestructMessage(object source, ElapsedEventArgs e, DiscordClient client, ulong guildId, ulong channelId, ulong messageId)
         {
             msgDestructTimer.Stop();
             msgDestructTimer.Dispose();
             msgDestructTimer.Enabled = false;
             try
             {
+                DiscordGuild guild = await client.GetGuildAsync(guildId);
+                DiscordChannel channel = guild.GetChannel(channelId);
+                var msg = await channel.GetMessageAsync(messageId);
                 await msg.DeleteAsync();
             }
             catch (Exception ex)
@@ -330,7 +333,7 @@ namespace ThePathBot.Commands.QueueCommands
                         Color = DiscordColor.Aquamarine
                     };
                     var loungeChannel = ctx.Guild.GetChannel(744731248416784545);
-                    await loungeChannel.SendMessageAsync(embed: turnipRoleEmbed).ConfigureAwait(false);
+                    await loungeChannel.SendMessageAsync($"{turnipRole.Mention}", embed: turnipRoleEmbed).ConfigureAwait(false);
                 }
             }
             catch (Exception ex)
@@ -452,7 +455,7 @@ namespace ThePathBot.Commands.QueueCommands
             }
             finally
             {
-                DestructMessage(null, null, ctx.Message);
+                await ctx.Message.DeleteAsync();
             }
 
         }
@@ -462,20 +465,19 @@ namespace ThePathBot.Commands.QueueCommands
         public async Task JoinQueue(CommandContext ctx, string code)
         {
             await ctx.Message.DeleteAsync();
-            DiscordMessage joinMessage;
             if (code.Length != 5)
             {
-                joinMessage = await ctx.Channel.SendMessageAsync($"{ctx.Member.Mention} This is not a valid code").ConfigureAwait(false);
-                StartTimer(joinMessage);
+                var joinMessage = await ctx.Channel.SendMessageAsync($"{ctx.Member.Mention} This is not a valid code").ConfigureAwait(false);
+                StartTimer(ctx.Client, ctx.Guild.Id, ctx.Channel.Id, joinMessage.Id);
                 return;
             }
             bool banned = IsUserBannedFromQueue(code, ctx.Member.Id);
 
             if (banned)
             {
-                joinMessage = await ctx.Channel.SendMessageAsync($"{ctx.Member.Mention} You have been banned from " +
+                var joinMessage = await ctx.Channel.SendMessageAsync($"{ctx.Member.Mention} You have been banned from " +
                     $"this queue and therefore cannot join it.").ConfigureAwait(false);
-                StartTimer(joinMessage);
+                StartTimer(ctx.Client, ctx.Guild.Id, ctx.Channel.Id, joinMessage.Id);
                 return;
             }
 
@@ -500,9 +502,9 @@ namespace ThePathBot.Commands.QueueCommands
                     else
                     {
                         // invalid code
-                        joinMessage = await ctx.Channel.SendMessageAsync($"{ctx.Member.Mention} " +
+                        var msg = await ctx.Channel.SendMessageAsync($"{ctx.Member.Mention} " +
                             $"This is not a valid code or the queue is no longer active").ConfigureAwait(false);
-                        StartTimer(joinMessage);
+                        StartTimer(ctx.Client, ctx.Guild.Id, ctx.Channel.Id, msg.Id);
                         validCode = false;
                     }
                 }
@@ -513,15 +515,15 @@ namespace ThePathBot.Commands.QueueCommands
 
                 if (CheckIfUserInQueue(ctx.Member.Id, queueChannelId))
                 {
-                    joinMessage = await ctx.Channel.SendMessageAsync($"{ctx.Member.Mention} You are already in this queue.").ConfigureAwait(false);
-                    StartTimer(joinMessage);
+                    var msg = await ctx.Channel.SendMessageAsync($"{ctx.Member.Mention} You are already in this queue.").ConfigureAwait(false);
+                    StartTimer(ctx.Client, ctx.Guild.Id, ctx.Channel.Id, msg.Id);
                     return;
                 }
                 AddMemberToQueue(ctx.Member.Id, queueChannelId, code);
-                joinMessage = await ctx.Channel.SendMessageAsync(
+                var joinMessage = await ctx.Channel.SendMessageAsync(
                     $"{ctx.Member.Mention} You have successfully joined the queue and will be DM'd when " +
                     "it's your turn.").ConfigureAwait(false);
-                StartTimer(joinMessage);
+                StartTimer(ctx.Client, ctx.Guild.Id, ctx.Channel.Id, joinMessage.Id);
                 var pChannel = ctx.Guild.GetChannel(queueChannelId);
                 await pChannel.SendMessageAsync($"{ctx.Member.DisplayName} has joined your queue").ConfigureAwait(false);
             }
@@ -529,10 +531,10 @@ namespace ThePathBot.Commands.QueueCommands
             {
                 Console.Out.WriteLine(ex.Message);
                 Console.Out.WriteLine(ex.StackTrace);
-                joinMessage = await ctx.Channel.SendMessageAsync($"{ctx.Member.Mention} " +
+                var joinMessage = await ctx.Channel.SendMessageAsync($"{ctx.Member.Mention} " +
                     $"There has been an error while running this command. " +
                     "If this persists please contact a mod/admin for help.").ConfigureAwait(false);
-                StartTimer(joinMessage);
+                StartTimer(ctx.Client, ctx.Guild.Id, ctx.Channel.Id, joinMessage.Id);
             }
         }
 
@@ -565,7 +567,7 @@ namespace ThePathBot.Commands.QueueCommands
                     command.ExecuteNonQuery();
                 }
                 var msg = await ctx.Channel.SendMessageAsync($"{ctx.Member.Mention} You are no longer in queue {code}.").ConfigureAwait(false);
-                StartTimer(msg);
+                StartTimer(ctx.Client, ctx.Guild.Id, ctx.Channel.Id, msg.Id);
                 await ctx.Message.DeleteAsync();
                 var queueChannel = ctx.Guild.GetChannel(privateChannel);
                 await queueChannel.SendMessageAsync($"{ctx.Member.DisplayName} has left your queue").ConfigureAwait(false);
@@ -584,7 +586,7 @@ namespace ThePathBot.Commands.QueueCommands
             if (ctx.Channel.Parent.Id != privateChannelGroup)
             {
                 var msg = await ctx.Channel.SendMessageAsync("You can only run this command from a private queue channel").ConfigureAwait(false);
-                StartTimer(msg);
+                StartTimer(ctx.Client, ctx.Guild.Id, ctx.Channel.Id, msg.Id);
                 return;
             }
             try
@@ -608,7 +610,7 @@ namespace ThePathBot.Commands.QueueCommands
                     {
                         var msg = await ctx.Channel.SendMessageAsync("There is no active queue associated with this channel.").ConfigureAwait(false);
                         reader.Close();
-                        StartTimer(msg);
+                        StartTimer(ctx.Client, ctx.Guild.Id, ctx.Channel.Id, msg.Id);
                         returnEarly = true;
                     }
                     while (reader.Read())
@@ -649,7 +651,7 @@ namespace ThePathBot.Commands.QueueCommands
                         var msg = await ctx.Channel.SendMessageAsync("There is no one waiting in your queue currently.").ConfigureAwait(false);
                         reader.Close();
                         connection.Close();
-                        StartTimer(msg);
+                        StartTimer(ctx.Client, ctx.Guild.Id, ctx.Channel.Id, msg.Id);
                         return;
                     }
                     while (reader.Read())
@@ -716,7 +718,7 @@ namespace ThePathBot.Commands.QueueCommands
                     {
                         var msg = await ctx.Channel.SendMessageAsync("Could not find a queue associated with this channel. " +
                             "Please contact a mod or admin to get the channel removed").ConfigureAwait(false);
-                        StartTimer(msg);
+                        StartTimer(ctx.Client, ctx.Guild.Id, ctx.Channel.Id, msg.Id);
                         endEarly = true;
                     }
                     while (reader.Read())
@@ -753,13 +755,14 @@ namespace ThePathBot.Commands.QueueCommands
         }
 
         [Command("updatemessage")]
+        [Aliases("um")]
         [Description("update your queues message")]
         public async Task UpdateQueueMessage(CommandContext ctx, [Description("new queue message"), RemainingText] string message)
         {
             if (ctx.Channel.Parent.Id != privateChannelGroup)
             {
                 var msg = await ctx.Channel.SendMessageAsync("You can only run this command from a private queue channel").ConfigureAwait(false);
-                StartTimer(msg);
+                StartTimer(ctx.Client, ctx.Guild.Id, ctx.Channel.Id, msg.Id);
                 return;
             }
             try
@@ -785,20 +788,20 @@ namespace ThePathBot.Commands.QueueCommands
         }
 
         [Command("updatedodo")]
-        [Aliases("updatecode")]
+        [Aliases("updatecode", "uc")]
         [Hidden]
         public async Task UpdateDodoCode(CommandContext ctx, string newcode)
         {
             if (ctx.Channel.Parent.Id != privateChannelGroup)
             {
                 var msg = await ctx.Channel.SendMessageAsync("You can only run this command from a private queue channel").ConfigureAwait(false);
-                StartTimer(msg);
+                StartTimer(ctx.Client, ctx.Guild.Id, ctx.Channel.Id, msg.Id);
                 return;
             }
             if (newcode.Length != 5)
             {
                 var msg = await ctx.Channel.SendMessageAsync("Dodo codes must be 5 characters long.").ConfigureAwait(false);
-                StartTimer(msg);
+                StartTimer(ctx.Client, ctx.Guild.Id, ctx.Channel.Id, msg.Id);
                 return;
             }
             try
@@ -867,7 +870,7 @@ namespace ThePathBot.Commands.QueueCommands
                 await ResendCodeToOnIslandPeeps(ctx, ctx.Channel.Id, newcode);
                 var msg = await ctx.Channel.SendMessageAsync($"Dodo code is now updated to {newcode} and the new code has been sent to everyone on island")
                     .ConfigureAwait(false);
-                StartTimer(msg);
+                StartTimer(ctx.Client, ctx.Guild.Id, ctx.Channel.Id, msg.Id);
             }
             catch (Exception ex)
             {
@@ -875,7 +878,7 @@ namespace ThePathBot.Commands.QueueCommands
                 Console.Out.WriteLine(ex.StackTrace);
                 var msg = await ctx.Channel.SendMessageAsync($"There was an error updating your dodo code, " +
                     $"if this persists please contact an admin or mod for help.").ConfigureAwait(false);
-                StartTimer(msg);
+                StartTimer(ctx.Client, ctx.Guild.Id, ctx.Channel.Id, msg.Id);
             }
             finally
             {
@@ -923,14 +926,14 @@ namespace ThePathBot.Commands.QueueCommands
             if (ctx.Channel.Parent.Id != privateChannelGroup)
             {
                 var msg = await ctx.Channel.SendMessageAsync("You can only run this command from a private queue channel").ConfigureAwait(false);
-                StartTimer(msg);
+                StartTimer(ctx.Client, ctx.Guild.Id, ctx.Channel.Id, msg.Id);
                 return;
             }
             ulong messageId = GetQueueMessageIdFromPrivateChannelId(ctx.Channel.Id);
             if (messageId == 0)
             {
                 var msg = await ctx.Channel.SendMessageAsync("Could not find a queue message associated with this channel.").ConfigureAwait(false);
-                StartTimer(msg);
+                StartTimer(ctx.Client, ctx.Guild.Id, ctx.Channel.Id, msg.Id);
                 return;
             }
             ulong channelToSearch;
@@ -977,14 +980,14 @@ namespace ThePathBot.Commands.QueueCommands
             if (ctx.Channel.Parent.Id != privateChannelGroup)
             {
                 var msg = await ctx.Channel.SendMessageAsync("You can only run this command from a private queue channel").ConfigureAwait(false);
-                StartTimer(msg);
+                StartTimer(ctx.Client, ctx.Guild.Id, ctx.Channel.Id, msg.Id);
                 return;
             }
             ulong messageId = GetQueueMessageIdFromPrivateChannelId(ctx.Channel.Id);
             if (messageId == 0)
             {
                 var msg = await ctx.Channel.SendMessageAsync("Could not find a queue message associated with this channel.").ConfigureAwait(false);
-                StartTimer(msg);
+                StartTimer(ctx.Client, ctx.Guild.Id, ctx.Channel.Id, msg.Id);
                 return;
             }
             ulong channelToSearch;
@@ -1134,7 +1137,7 @@ namespace ThePathBot.Commands.QueueCommands
                 var msg = await ctx.Channel.SendMessageAsync("An error has occured while running this command").ConfigureAwait(false);
                 Console.Out.WriteLine(ex.Message);
                 Console.Out.WriteLine(ex.StackTrace);
-                StartTimer(msg);
+                StartTimer(ctx.Client, ctx.Guild.Id, ctx.Channel.Id, msg.Id);
             }
             finally
             {
@@ -1149,7 +1152,7 @@ namespace ThePathBot.Commands.QueueCommands
             if (ctx.Channel.ParentId != privateChannelGroup)
             {
                 var msg = await ctx.Channel.SendMessageAsync($"{ctx.Member.Mention} You can only run this command from a private queue channel").ConfigureAwait(false);
-                StartTimer(msg);
+                StartTimer(ctx.Client, ctx.Guild.Id, ctx.Channel.Id, msg.Id);
                 return;
             }
 
@@ -1172,7 +1175,7 @@ namespace ThePathBot.Commands.QueueCommands
                     {
                         var msg = await ctx.Channel.SendMessageAsync("Could not find any user at this position.").ConfigureAwait(false);
                         reader.Close();
-                        StartTimer(msg);
+                        StartTimer(ctx.Client, ctx.Guild.Id, ctx.Channel.Id, msg.Id);
                         returnEarly = true;
                     }
                     else
@@ -1217,13 +1220,13 @@ namespace ThePathBot.Commands.QueueCommands
 
                     var bannedUser = await ctx.Guild.GetMemberAsync(discordID).ConfigureAwait(false);
                     var msg = await ctx.Channel.SendMessageAsync($"{bannedUser.DisplayName} has been banned from your queue session").ConfigureAwait(false);
-                    StartTimer(msg);
+                    StartTimer(ctx.Client, ctx.Guild.Id, ctx.Channel.Id, msg.Id);
                 }
                 else
                 {
                     var bannedUser = await ctx.Guild.GetMemberAsync(discordID).ConfigureAwait(false);
                     var msg = await ctx.Channel.SendMessageAsync($"{bannedUser.DisplayName} is already banned from your queue").ConfigureAwait(false);
-                    StartTimer(msg);
+                    StartTimer(ctx.Client, ctx.Guild.Id, ctx.Channel.Id, msg.Id);
                 }
             }
             catch (Exception ex)
@@ -1231,7 +1234,7 @@ namespace ThePathBot.Commands.QueueCommands
                 var msg = await ctx.Channel.SendMessageAsync("An error has occured while running this command").ConfigureAwait(false);
                 Console.Out.WriteLine(ex.Message);
                 Console.Out.WriteLine(ex.StackTrace);
-                StartTimer(msg);
+                StartTimer(ctx.Client, ctx.Guild.Id, ctx.Channel.Id, msg.Id);
             }
         }
 
