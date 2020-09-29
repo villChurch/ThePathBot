@@ -815,6 +815,10 @@ namespace ThePathBot.Commands.QueueCommands
                     connection.Open();
                     command.ExecuteNonQuery();
                 }
+                var msg = await ctx.Channel.SendMessageAsync($"Dodo code is now updated to {newcode} and the new code has been sent to everyone on island")
+                    .ConfigureAwait(false);
+                StartTimer(ctx.Client, ctx.Guild.Id, ctx.Channel.Id, msg.Id);
+
                 ulong msgId = GetQueueMessageIdFromPrivateChannelId(ctx.Channel.Id);
                 string turnipPrice = "", message = "", maxGroupSize = "";
                 bool isDaisy = false;
@@ -868,9 +872,7 @@ namespace ThePathBot.Commands.QueueCommands
                 DiscordEmbed newEmbed = embed;
                 await oldEmbed.ModifyAsync(embed: newEmbed).ConfigureAwait(false);
                 await ResendCodeToOnIslandPeeps(ctx, ctx.Channel.Id, newcode);
-                var msg = await ctx.Channel.SendMessageAsync($"Dodo code is now updated to {newcode} and the new code has been sent to everyone on island")
-                    .ConfigureAwait(false);
-                StartTimer(ctx.Client, ctx.Guild.Id, ctx.Channel.Id, msg.Id);
+
             }
             catch (Exception ex)
             {
@@ -888,33 +890,41 @@ namespace ThePathBot.Commands.QueueCommands
 
         private async Task ResendCodeToOnIslandPeeps(CommandContext ctx, ulong channelId, string dodoCode)
         {
-            List<ulong> discordIds = new List<ulong>();
-            using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
+            try
             {
-                string query = "Select DiscordID from pathQueuers WHERE onisland = 1 AND visited = 0 and queueChannelID = ?channelId";
-                var command = new MySqlCommand(query, connection);
-                command.Parameters.Add("?channelId", MySqlDbType.VarChar, 40).Value = channelId;
-                connection.Open();
-                var reader = command.ExecuteReader();
-                if (reader.HasRows)
+                List<ulong> discordIds = new List<ulong>();
+                using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
                 {
-                    while (reader.Read())
+                    string query = "Select DiscordID from pathQueuers WHERE onisland = 1 AND visited = 0 and queueChannelID = ?channelId";
+                    var command = new MySqlCommand(query, connection);
+                    command.Parameters.Add("?channelId", MySqlDbType.VarChar, 40).Value = channelId;
+                    connection.Open();
+                    var reader = command.ExecuteReader();
+                    if (reader.HasRows)
                     {
-                        discordIds.Add(reader.GetUInt64("DiscordID"));
+                        while (reader.Read())
+                        {
+                            discordIds.Add(reader.GetUInt64("DiscordID"));
+                        }
                     }
                 }
-            }
-            if (discordIds.Count < 1)
-            {
-                return;
-            }
+                if (discordIds.Count < 1)
+                {
+                    return;
+                }
 
-            foreach (ulong id in discordIds)
+                foreach (ulong id in discordIds)
+                {
+                    var member = await ctx.Guild.GetMemberAsync(id);
+                    var dmChannel = await member.CreateDmChannelAsync();
+                    await dmChannel.SendMessageAsync($"The dodo code for the queue has changed to {dodoCode}. " +
+                        $"If you have problems connection please try this new code").ConfigureAwait(false);
+                }
+            }
+            catch (Exception ex)
             {
-                var member = await ctx.Guild.GetMemberAsync(id);
-                var dmChannel = await member.CreateDmChannelAsync();
-                await dmChannel.SendMessageAsync($"The dodo code for the queue has changed to {dodoCode}. " +
-                    $"If you have problems connection please try this new code").ConfigureAwait(false);
+                Console.Out.WriteLine(ex.Message);
+                Console.Out.WriteLine(ex.StackTrace);
             }
         }
 

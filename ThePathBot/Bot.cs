@@ -301,13 +301,13 @@ namespace ThePathBot
                 {
                     return; // for when people do ?????!?....
                 }
-                var embed = new DiscordEmbedBuilder
-                {
-                    Title = "Command not found",
-                    Description = $"I do not know this command. See ?help for a list of commands I know.",
-                    Color = new DiscordColor(0xFF0000) // red
-                };
-                await e.Context.RespondAsync("", embed: embed);
+                //var embed = new DiscordEmbedBuilder
+                //{
+                //    Title = "Command not found",
+                //    Description = $"I do not know this command. See ?help for a list of commands I know.",
+                //    Color = new DiscordColor(0xFF0000) // red
+                //};
+                //await e.Context.RespondAsync("", embed: embed);
             }
         }
 
