@@ -283,32 +283,32 @@ namespace ThePathBot
         {
             e.Context.Client.Logger.Log(LogLevel.Error, $"The Path - {e.Context.User.Username} tried executing '{e.Command?.QualifiedName ?? "<unknown command>"}' but it errored: {e.Exception.GetType()}: {e.Exception.Message ?? "<no message>"}");
 
-            if (e.Exception is ChecksFailedException ex)
-            {
-                var emoji = DiscordEmoji.FromName(e.Context.Client, ":no_entry:");
+            //if (e.Exception is ChecksFailedException ex)
+            //{
+            //    var emoji = DiscordEmoji.FromName(e.Context.Client, ":no_entry:");
 
-                var embed = new DiscordEmbedBuilder
-                {
-                    Title = "Access denied",
-                    Description = $"{emoji} You do not have the permissions required to execute this command.",
-                    Color = new DiscordColor(0xFF0000) // red
-                };
-                await e.Context.RespondAsync("", embed: embed);
-            }
-            else if (e.Exception is CommandNotFoundException Cnfex)
-            {
-                if (e.Context.Message.Content.Contains("??") || e.Context.Message.Content.Contains("?!"))
-                {
-                    return; // for when people do ?????!?....
-                }
-                //var embed = new DiscordEmbedBuilder
-                //{
-                //    Title = "Command not found",
-                //    Description = $"I do not know this command. See ?help for a list of commands I know.",
-                //    Color = new DiscordColor(0xFF0000) // red
-                //};
-                //await e.Context.RespondAsync("", embed: embed);
-            }
+            //    var embed = new DiscordEmbedBuilder
+            //    {
+            //        Title = "Access denied",
+            //        Description = $"{emoji} You do not have the permissions required to execute this command.",
+            //        Color = new DiscordColor(0xFF0000) // red
+            //    };
+            //    await e.Context.RespondAsync("", embed: embed);
+            //}
+            //else if (e.Exception is CommandNotFoundException Cnfex)
+            //{
+            //    if (e.Context.Message.Content.Contains("??") || e.Context.Message.Content.Contains("?!"))
+            //    {
+            //        return; // for when people do ?????!?....
+            //    }
+            //    //var embed = new DiscordEmbedBuilder
+            //    //{
+            //    //    Title = "Command not found",
+            //    //    Description = $"I do not know this command. See ?help for a list of commands I know.",
+            //    //    Color = new DiscordColor(0xFF0000) // red
+            //    //};
+            //    //await e.Context.RespondAsync("", embed: embed);
+            //}
         }
 
         private async Task UpdatePresenceAsync(object _, int amount)

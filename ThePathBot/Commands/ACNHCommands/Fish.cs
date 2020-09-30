@@ -17,6 +17,7 @@ namespace ThePathBot.Commands.ACNHCommands
     {
         [Command("fishy")]
         [Description("Gets certian informaiton about a fishy")]
+        [Cooldown(1, 60, CooldownBucketType.Channel)]
         public async Task getFish(CommandContext ctx, [Description("fish name")] params string[] args)
         {
             if (ctx.Guild.Id == 694013861560320081)
@@ -83,6 +84,7 @@ namespace ThePathBot.Commands.ACNHCommands
         [Command("fish")]
         [Aliases("fa")]
         [Description("Get information on what fish are available that month in nh or sh")]
+        [Cooldown(1, 60, CooldownBucketType.Channel)]
         public async Task FishInfoByMonth(CommandContext ctx, [Description("full month name, eg April")] string month, [RemainingText, Description("nh for north or sh for south")] string hemi)
         {
             try

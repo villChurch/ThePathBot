@@ -14,6 +14,7 @@ namespace ThePathBot.Commands.ACNHCommands
     public class Villager : BaseCommandModule
     {
         [Command("villager")]
+        [Cooldown(1, 60, CooldownBucketType.Channel)]
         public async Task getVillager(CommandContext ctx, params string[] villagerInput)
         {
             //if (ctx.Guild.Id == 694013861560320081)
@@ -74,6 +75,7 @@ namespace ThePathBot.Commands.ACNHCommands
 
         [Command("personality")]
         [Description("Gets a list of villagers with that personaltiy")]
+        [Cooldown(1, 60, CooldownBucketType.Channel)]
         public async Task Personality(CommandContext ctx, [RemainingText, Description("personality to search for")] string personality)
         {
             try
@@ -137,6 +139,7 @@ namespace ThePathBot.Commands.ACNHCommands
         [Command("birthday")]
         [Aliases("bday")]
         [Description("Gets todays birthdays using UTC time zone")]
+        [Cooldown(1, 60, CooldownBucketType.Channel)]
         public async Task Birthday(CommandContext ctx, [Description("optional: add a date in format {day-month} eg 23-01, if no date included uses todays date")] params string[] date)
         {
             string joinedDate = string.Join("", date).Trim();
@@ -263,6 +266,7 @@ namespace ThePathBot.Commands.ACNHCommands
         [Command("birthdayTomorrow")]
         [Aliases("bt", "tomorrow")]
         [Description("tomorrows birthdays utc")]
+        [Cooldown(1, 60, CooldownBucketType.Channel)]
         public async Task TomorrowsBirthdays(CommandContext ctx)
         {
             try
