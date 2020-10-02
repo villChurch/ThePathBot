@@ -17,9 +17,9 @@ namespace ThePathBot.Commands.QueueCommands
 {
     public class Queue : BaseCommandModule
     {
-        private readonly ulong privateChannelGroup = 745024494464270448; //test server 744273831602028645
-        private readonly ulong turnipPostChannel = 744733259748999270; //744644693479915591
-        private readonly ulong daisyMaeChannel = 744733207148232845;
+        private readonly ulong privateChannelGroup = 761508425888038923; // honna 745024494464270448;
+        private readonly ulong turnipPostChannel = 761508382108418098; // honna 744733259748999270;
+        private readonly ulong daisyMaeChannel = 761508362097131571; // honna 744733207148232845;
         private readonly DBConnectionUtils dBConnectionUtils = new DBConnectionUtils();
         private Timer msgDestructTimer;
         string turnipPrice = "0";
@@ -113,7 +113,7 @@ namespace ThePathBot.Commands.QueueCommands
                         var result = await interactivity.WaitForReactionAsync(react => (react.Emoji == thumbsup ||
                         react.Emoji == thumbsDown) && react.User == ctx.User, TimeSpan.FromMinutes(4)).ConfigureAwait(false);
 
-                        if (result.TimedOut)
+                        if (result.TimedOut || result.Result.Emoji == thumbsDown)
                         {
                             //close channel
                             await newChannel.DeleteAsync();
@@ -165,7 +165,7 @@ namespace ThePathBot.Commands.QueueCommands
                 bool responseCorrect = true;
                 await newChannel.SendMessageAsync("Enter your Dodo Code").ConfigureAwait(false);
 
-                var msg = await interactivity.WaitForMessageAsync(x => x.Channel == newChannel && x.Author == ctx.Member, TimeSpan.FromMinutes(5)).ConfigureAwait(false);
+                var msg = await interactivity.WaitForMessageAsync(x => x.Channel == newChannel && x.Author == ctx.Member, TimeSpan.FromMinutes(1)).ConfigureAwait(false);
 
                 if (msg.TimedOut)
                 {
@@ -323,6 +323,7 @@ namespace ThePathBot.Commands.QueueCommands
                     if (response.Result.Emoji == yes)
                     {
                         ready = true;
+                        timedOut = false;
                     }
                 }
                 else
@@ -341,7 +342,11 @@ namespace ThePathBot.Commands.QueueCommands
             {
                 Title = embedTitle,
                 ImageUrl = attachment,
-                Description = $"To join type ```?join {sessionCode}```"
+                Description = $"To join type ```?join {sessionCode}```",
+                Footer = new DiscordEmbedBuilder.EmbedFooter
+                {
+                    Text = $"Hosted by {ctx.Member.DisplayName}"
+                }
             };
             ulong postChannelId = isDaisy ? daisyMaeChannel : turnipPostChannel;
             var postChannel = ctx.Guild.GetChannel(postChannelId);
@@ -1072,8 +1077,8 @@ namespace ThePathBot.Commands.QueueCommands
                 };
                 await message.DeleteAsync();
                 MakeQueueActive(ctx.Channel.Id);
-                await ctx.Guild.GetChannel(channelToSearch).SendMessageAsync(embed: newEmbed).ConfigureAwait(false); // var newMsg = 
-                //UpdateMessageID(ctx.Channel.Id, newMsg.Id);
+                var newMsg = await ctx.Guild.GetChannel(channelToSearch).SendMessageAsync(embed: newEmbed).ConfigureAwait(false); // var newMsg = 
+                UpdateMessageID(ctx.Channel.Id, newMsg.Id);
                 await ctx.Channel.SendMessageAsync("Queue has been resumed").ConfigureAwait(false); 
             }
             catch (Exception ex)
@@ -1571,7 +1576,7 @@ namespace ThePathBot.Commands.QueueCommands
                 {
                     string query = "UPDATE pathQueues SET queueMessageID = ?msgId WHERE privateChannelID = ?channelId";
                     MySqlCommand command = new MySqlCommand(query, connection);
-                    command.Parameters.Add("?mgsId", MySqlDbType.VarChar, 40).Value = MessageID;
+                    command.Parameters.Add("?msgId", MySqlDbType.VarChar, 40).Value = MessageID;
                     command.Parameters.Add("?channelId", MySqlDbType.VarChar, 40).Value = privateChannelID;
                     connection.Open();
                     command.ExecuteNonQuery();
