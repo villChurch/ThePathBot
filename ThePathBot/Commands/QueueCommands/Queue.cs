@@ -17,9 +17,9 @@ namespace ThePathBot.Commands.QueueCommands
 {
     public class Queue : BaseCommandModule
     {
-        private readonly ulong privateChannelGroup = 761508425888038923; //745024494464270448
-        private readonly ulong turnipPostChannel = 761508382108418098; //744733259748999270
-        private readonly ulong daisyMaeChannel = 761508362097131571; //744733207148232845
+        private readonly ulong privateChannelGroup = 745024494464270448; //test 761508425888038923
+        private readonly ulong turnipPostChannel = 744733259748999270; //test 761508382108418098
+        private readonly ulong daisyMaeChannel = 744733207148232845; //test 761508362097131571
         private readonly DBConnectionUtils dBConnectionUtils = new DBConnectionUtils();
         private Timer msgDestructTimer;
         string turnipPrice = "0";
