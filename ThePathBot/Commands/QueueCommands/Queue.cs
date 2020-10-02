@@ -702,10 +702,10 @@ namespace ThePathBot.Commands.QueueCommands
                     return;
                 }
                 AddMemberToQueue(ctx.Member.Id, queueChannelId, code);
-                var joinMessage = await ctx.Channel.SendMessageAsync(
-                    $"{ctx.Member.Mention} You have successfully joined the queue and will be DM'd when " +
-                    "it's your turn.").ConfigureAwait(false);
-                StartTimer(ctx.Client, ctx.Guild.Id, ctx.Channel.Id, joinMessage.Id);
+
+                await ctx.Member.SendMessageAsync("You have successfully joined the queue and will be DM'd when it's your turn. " +
+                    $"To Check your place in the queue you can run {Formatter.InlineCode("checkqueue" + code)} in #path-bot-commands");
+
                 var pChannel = ctx.Guild.GetChannel(queueChannelId);
                 await pChannel.SendMessageAsync($"{ctx.Member.DisplayName} has joined your queue").ConfigureAwait(false);
             }
