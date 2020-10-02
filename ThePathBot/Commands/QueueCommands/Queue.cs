@@ -238,7 +238,7 @@ namespace ThePathBot.Commands.QueueCommands
                 bool responseCorrect = true;
                 await newChannel.SendMessageAsync("Enter your Dodo Code").ConfigureAwait(false);
 
-                var msg = await interactivity.WaitForMessageAsync(x => x.Channel == newChannel && x.Author == ctx.Member, TimeSpan.FromMinutes(1)).ConfigureAwait(false);
+                var msg = await interactivity.WaitForMessageAsync(x => x.Channel == newChannel && x.Author == ctx.Member, TimeSpan.FromMinutes(5)).ConfigureAwait(false);
 
                 if (msg.TimedOut)
                 {
