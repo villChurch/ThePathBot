@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -61,6 +62,78 @@ namespace ThePathBot.Commands.QueueCommands
                 DiscordChannel channel = guild.GetChannel(channelId);
                 var msg = await channel.GetMessageAsync(messageId);
                 await msg.DeleteAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.Out.WriteLine(ex.Message);
+                Console.Out.WriteLine(ex.StackTrace);
+            }
+        }
+
+        [Command("place")]
+        [Description("Check your place in a queue")]
+        public async Task CheckPlaceInQueue(CommandContext ctx, [Description("code of queue")] string queueCode)
+        {
+            try
+            {
+                var channelId = GetPrivateChannelFromCode(queueCode);
+                var timeJoined = "";
+                var groupSize = GetMaxVisitorsAtOnceFromCode(queueCode);
+                using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
+                {
+                    string query = "Select TimeJoined from pathQueuers Where DiscordID = ?discordID AND queueChannelID = ?channelId";
+                    var command = new MySqlCommand(query, connection);
+                    command.Parameters.Add("?discordID", MySqlDbType.VarChar, 40).Value = ctx.Member.Id;
+                    command.Parameters.Add("?channelId", MySqlDbType.VarChar, 40).Value = channelId;
+                    connection.Open();
+                    var reader = command.ExecuteReader();
+                    while (reader.Read())
+                    {
+                        timeJoined = reader.GetString("TimeJoined");
+                    }
+                }
+
+                if (string.IsNullOrEmpty(timeJoined))
+                {
+                    await ctx.Channel.SendMessageAsync("Looks like you are not part of a queue");
+                }
+                else
+                {
+                    //02/10/2020 12:36:54
+                    DateTime time = DateTime.Parse(timeJoined + "Z");
+                    int numberInfront = 0;
+                    using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
+                    {
+                        string query = "Select * from pathQueuers Where queueChannelID = ?channelId AND TimeJoined >= ?timeJoined " +
+                            "and visited = 0 and DiscordID <> ?discordId AND onIsland = 0";
+                        var command = new MySqlCommand(query, connection);
+                        command.Parameters.Add("?channelId", MySqlDbType.VarChar, 40).Value = channelId;
+                        command.Parameters.Add("?timeJoined", MySqlDbType.VarChar).Value = time.ToString("yyyy-MM-dd hh:mm:ss");
+                        command.Parameters.Add("?discordId", MySqlDbType.VarChar, 40).Value = ctx.Member.Id;
+                        connection.Open();
+                        var reader = command.ExecuteReader();
+
+                        if (reader.HasRows)
+                        {
+                            while (reader.Read())
+                            {
+                                numberInfront++;
+                            }
+                        }
+                    }
+
+                    if (numberInfront == 0)
+                    {
+                        await ctx.Channel.SendMessageAsync("Looks like you are next up in the queue!");
+                    }
+                    else
+                    {
+                        int yourQueue = ((numberInfront - 1) / groupSize) + 1;
+                        string queue = yourQueue == 1 ? "queue" : "queues";
+                        await ctx.Channel.SendMessageAsync(
+                            $"There are currently {yourQueue} {queue} ahead of you and the queue size is {groupSize} at a time").ConfigureAwait(false);
+                    }
+                }
             }
             catch (Exception ex)
             {
