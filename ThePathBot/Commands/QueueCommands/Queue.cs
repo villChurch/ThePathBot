@@ -69,6 +69,66 @@ namespace ThePathBot.Commands.QueueCommands
             }
         }
 
+        [Command("place")]
+        [Description("Check your place in a queue")]
+        public async Task CheckPlaceInQueue(CommandContext ctx, [RemainingText, Description("code of queue")] string queueCode)
+        {
+            var channelId = GetPrivateChannelFromCode(queueCode);
+            var timeJoined = "";
+            var groupSize = GetMaxVisitorsAtOnceFromCode(queueCode);
+            using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
+            {
+                string query = "Select TimeJoined from pathQueuers Where DiscordID = ?discordID AND queueChannelID = ?channelId";
+                var command = new MySqlCommand(query, connection);
+                command.Parameters.Add("?discordID", MySqlDbType.VarChar, 40).Value = ctx.Member.Id;
+                command.Parameters.Add("?channelId", MySqlDbType.VarChar, 40).Value = channelId;
+                var reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    timeJoined = reader.GetString("TimeJoined");
+                }
+            }
+
+            if (string.IsNullOrEmpty(timeJoined))
+            {
+                await ctx.Channel.SendMessageAsync("Looks like you are not part of a queue");
+            }
+            else
+            {
+                int numberInfront = 0;
+                using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
+                {
+                    string query = "Select * from pathQueres Where queueChannelID = ?channelId AND TimeJoined >= ?timeJoined " +
+                        "and visited = 0 and DiscordID <> ?discordId";
+                    var command = new MySqlCommand(query, connection);
+                    command.Parameters.Add("?channelId", MySqlDbType.VarChar, 40).Value = channelId;
+                    command.Parameters.Add("?timeJoined", MySqlDbType.Timestamp).Value = timeJoined;
+                    command.Parameters.Add("?discordId", MySqlDbType.VarChar, 40).Value = ctx.Member.Id;
+                    var reader = command.ExecuteReader();
+
+                    if (reader.HasRows)
+                    {
+                        while (reader.Read())
+                        {
+                            numberInfront++;
+                        }
+                    }
+                }
+
+                if (numberInfront == 0)
+                {
+                    await ctx.Channel.SendMessageAsync("Looks like you are next up in the queue!");
+                }
+                else
+                {
+                    int yourQueue = ((numberInfront - 1) / groupSize) + 1;
+                    string queue = yourQueue == 1 ? "queue" : "queues";
+                    await ctx.Channel.SendMessageAsync(
+                        $"There are currently {yourQueue} {queue} ahead of you and the queue size is {groupSize} at a time").ConfigureAwait(false);
+                }
+            }
+        }
+
         [Command("create")]
         [Description("Create queue")]
         public async Task CreateQueue(CommandContext ctx)
