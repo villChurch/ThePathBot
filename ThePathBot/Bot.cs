@@ -17,6 +17,9 @@ using Microsoft.Extensions.DependencyInjection;
 using ThePathBot.Listeners;
 using System.Reflection;
 using ThePathBot.Services;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text.RegularExpressions;
 
 namespace ThePathBot
 {
@@ -31,6 +34,13 @@ namespace ThePathBot
         private readonly ulong nookShopChannelId = 744733259748999270; // test channel 746852898465644544;
         private readonly ulong codeShareChannelId = 744751909805752330;
         private readonly DBConnectionUtils dBConnectionUtils = new DBConnectionUtils();
+        private List<ulong> rolesList = new List<ulong>
+        {
+            744731961309790208,
+            744723803560607744,
+            744800999360954389,
+            744722910161272954
+        };
 
         //private static readonly DateTime UnixEpoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         private int totalMembers = 0;
@@ -155,6 +165,15 @@ namespace ThePathBot
             await ReactionService.CheckReactionAddedIsFridgeReaction(e);
         }
 
+        private bool HasRole(DiscordMember member)
+        {
+            var memberRoles = member.Roles;
+
+            List<ulong> memberRolesIds = memberRoles.Select(role => role.Id).ToList();
+
+            IEnumerable<ulong> commonRoles = memberRolesIds.Intersect(rolesList);
+            return commonRoles.ToList().Count > 0;
+        }
         private async Task Client_MessageCreated(MessageCreateEventArgs e)
         {
             if (e.Channel.Id == daisymaeChannelId || e.Channel.Id == nookShopChannelId || e.Channel.Id == codeShareChannelId)
@@ -164,7 +183,13 @@ namespace ThePathBot
                     return;
                 }
 
-                if (e.Message.Content.StartsWith("?join"))
+                if (Regex.Matches(e.Message.Content, @"((\?join) ([a-zA-Z0-9]{5}))").Count > 0)
+                {
+                    return;
+                }
+
+                DiscordMember member = await e.Guild.GetMemberAsync(e.Author.Id);
+                if (HasRole(member))
                 {
                     return;
                 }
@@ -214,7 +239,7 @@ namespace ThePathBot
                         {
                             Title = "Wrong number!",
                             Color = DiscordColor.Red,
-                            Description = $"{member.DisplayName} has enetered the wrong number! Start again from 1"
+                            Description = $"{member.DisplayName} has entered the wrong number! Start again from 1"
                         };
                         countNumber = 0;
                         LastCountId = 0;
@@ -258,32 +283,32 @@ namespace ThePathBot
         {
             e.Context.Client.Logger.Log(LogLevel.Error, $"The Path - {e.Context.User.Username} tried executing '{e.Command?.QualifiedName ?? "<unknown command>"}' but it errored: {e.Exception.GetType()}: {e.Exception.Message ?? "<no message>"}");
 
-            if (e.Exception is ChecksFailedException ex)
-            {
-                var emoji = DiscordEmoji.FromName(e.Context.Client, ":no_entry:");
+            //if (e.Exception is ChecksFailedException ex)
+            //{
+            //    var emoji = DiscordEmoji.FromName(e.Context.Client, ":no_entry:");
 
-                var embed = new DiscordEmbedBuilder
-                {
-                    Title = "Access denied",
-                    Description = $"{emoji} You do not have the permissions required to execute this command.",
-                    Color = new DiscordColor(0xFF0000) // red
-                };
-                await e.Context.RespondAsync("", embed: embed);
-            }
-            else if (e.Exception is CommandNotFoundException Cnfex)
-            {
-                if (e.Context.Message.Content.Contains("??") || e.Context.Message.Content.Contains("?!"))
-                {
-                    return; // for when people do ?????!?....
-                }
-                var embed = new DiscordEmbedBuilder
-                {
-                    Title = "Command not found",
-                    Description = $"I do not know this command. See ?help for a list of commands I know.",
-                    Color = new DiscordColor(0xFF0000) // red
-                };
-                await e.Context.RespondAsync("", embed: embed);
-            }
+            //    var embed = new DiscordEmbedBuilder
+            //    {
+            //        Title = "Access denied",
+            //        Description = $"{emoji} You do not have the permissions required to execute this command.",
+            //        Color = new DiscordColor(0xFF0000) // red
+            //    };
+            //    await e.Context.RespondAsync("", embed: embed);
+            //}
+            //else if (e.Exception is CommandNotFoundException Cnfex)
+            //{
+            //    if (e.Context.Message.Content.Contains("??") || e.Context.Message.Content.Contains("?!"))
+            //    {
+            //        return; // for when people do ?????!?....
+            //    }
+            //    //var embed = new DiscordEmbedBuilder
+            //    //{
+            //    //    Title = "Command not found",
+            //    //    Description = $"I do not know this command. See ?help for a list of commands I know.",
+            //    //    Color = new DiscordColor(0xFF0000) // red
+            //    //};
+            //    //await e.Context.RespondAsync("", embed: embed);
+            //}
         }
 
         private async Task UpdatePresenceAsync(object _, int amount)

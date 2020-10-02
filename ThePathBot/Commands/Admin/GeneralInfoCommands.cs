@@ -3,6 +3,7 @@ using DSharpPlus.CommandsNext;
 using DSharpPlus.CommandsNext.Attributes;
 using DSharpPlus.Entities;
 using ThePathBot.Attributes;
+using System.Linq;
 
 namespace ThePathBot.Commands.Admin
 {
@@ -19,14 +20,21 @@ namespace ThePathBot.Commands.Admin
             {
                 Title = ctx.Guild.Name,
                 Color = DiscordColor.Aquamarine,
+                Thumbnail = new DiscordEmbedBuilder.EmbedThumbnail
+                {
+                    Url = ctx.Guild.IconUrl
+                },
                 Footer = new DiscordEmbedBuilder.EmbedFooter
                 {
                     Text = ctx.Message.CreationTimestamp.ToString()
                 }
             };
             var memberList = await ctx.Guild.GetAllMembersAsync();
+            int botCount = memberList.Count(member => member.IsBot);
             serverInfoEmbed.AddField("Server Owner", ctx.Guild.Owner.DisplayName, false);
-            serverInfoEmbed.AddField("Members", memberList.Count.ToString(), false);
+            serverInfoEmbed.AddField("Total Members - including bots", memberList.Count.ToString(), false);
+            serverInfoEmbed.AddField("Total Members - without bots", (memberList.Count - botCount).ToString(), false);
+            serverInfoEmbed.AddField("Number of Bots", botCount.ToString(), false);
             serverInfoEmbed.AddField("Boosters", ctx.Guild.PremiumSubscriptionCount.ToString(), false);
             serverInfoEmbed.AddField("Created On", ctx.Guild.CreationTimestamp.ToString(), false);
 
