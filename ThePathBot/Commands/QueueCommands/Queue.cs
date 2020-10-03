@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -17,11 +18,18 @@ namespace ThePathBot.Commands.QueueCommands
 {
     public class Queue : BaseCommandModule
     {
-        private readonly ulong privateChannelGroup = 745024494464270448; //test server 744273831602028645
-        private readonly ulong turnipPostChannel = 744733259748999270; //744644693479915591
-        private readonly ulong daisyMaeChannel = 744733207148232845;
+        private readonly ulong privateChannelGroup = 745024494464270448; //test 761508425888038923
+        private readonly ulong turnipPostChannel = 744733259748999270; //test 761508382108418098
+        private readonly ulong daisyMaeChannel = 744733207148232845; //test 761508362097131571
         private readonly DBConnectionUtils dBConnectionUtils = new DBConnectionUtils();
         private Timer msgDestructTimer;
+        string turnipPrice = "0";
+        string attachment = "";
+        string maxGroupSize = "0";
+        string dodoCode = "";
+        string message = "Welcome";
+        bool isDaisy = false;
+        bool timedOut = false;
         private readonly DiscordEmbedBuilder sessionEmbed = new DiscordEmbedBuilder
         {
             Title = "Your Queue has been created",
@@ -61,6 +69,370 @@ namespace ThePathBot.Commands.QueueCommands
                 Console.Out.WriteLine(ex.StackTrace);
             }
         }
+
+        [Command("place")]
+        [Aliases("check")]
+        [Description("Check your place in a queue")]
+        public async Task CheckPlaceInQueue(CommandContext ctx, [Description("code of queue")] string queueCode)
+        {
+            try
+            {
+                var channelId = GetPrivateChannelFromCode(queueCode);
+                var timeJoined = "";
+                var groupSize = GetMaxVisitorsAtOnceFromCode(queueCode);
+                using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
+                {
+                    string query = "Select TimeJoined from pathQueuers Where DiscordID = ?discordID AND queueChannelID = ?channelId";
+                    var command = new MySqlCommand(query, connection);
+                    command.Parameters.Add("?discordID", MySqlDbType.VarChar, 40).Value = ctx.Member.Id;
+                    command.Parameters.Add("?channelId", MySqlDbType.VarChar, 40).Value = channelId;
+                    connection.Open();
+                    var reader = command.ExecuteReader();
+                    while (reader.Read())
+                    {
+                        timeJoined = reader.GetString("TimeJoined");
+                    }
+                }
+
+                if (string.IsNullOrEmpty(timeJoined))
+                {
+                    await ctx.Channel.SendMessageAsync("Looks like you are not part of a queue");
+                }
+                else
+                {
+                    //02/10/2020 12:36:54
+                    Console.Out.WriteLine($"time joined ===============> {timeJoined}");
+                    DateTime time = DateTime.Parse(timeJoined);
+                    int numberInfront = 0;
+                    using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
+                    {
+                        string query = "Select * from pathQueuers Where queueChannelID = ?channelId AND TimeJoined <= ?timeJoined " +
+                            "and visited = 0 and DiscordID <> ?discordId AND onIsland = 0";
+                        var command = new MySqlCommand(query, connection);
+                        command.Parameters.Add("?channelId", MySqlDbType.VarChar, 40).Value = channelId;
+                        command.Parameters.Add("?timeJoined", MySqlDbType.VarChar).Value = time.ToString("yyyy-MM-dd hh:mm:ss");
+                        command.Parameters.Add("?discordId", MySqlDbType.VarChar, 40).Value = ctx.Member.Id;
+                        connection.Open();
+                        var reader = command.ExecuteReader();
+
+                        if (reader.HasRows)
+                        {
+                            while (reader.Read())
+                            {
+                                numberInfront++;
+                            }
+                        }
+                    }
+
+                    if (numberInfront == 0)
+                    {
+                        await ctx.Channel.SendMessageAsync("Looks like you are next up in the queue!");
+                    }
+                    else
+                    {
+                        int yourQueue = ((numberInfront - 1) / groupSize) + 1;
+                        string queue = yourQueue == 1 ? "queue" : "queues";
+                        await ctx.Channel.SendMessageAsync(
+                            $"There is currently {yourQueue} {queue} ahead of you and the queue size is {groupSize} at a time").ConfigureAwait(false);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.Out.WriteLine(ex.Message);
+                Console.Out.WriteLine(ex.StackTrace);
+            }
+        }
+
+        [Command("create")]
+        [Description("Create queue")]
+        public async Task CreateQueue(CommandContext ctx)
+        {
+            if (ctx.Guild.Id == 694013861560320081)
+            {
+                var embed = new DiscordEmbedBuilder
+                {
+                    Title = "Wuh-oh!",
+                    Description = "Sorry... This command cannot be run in this server.",
+                    Color = DiscordColor.Blurple
+                };
+                await ctx.Channel.SendMessageAsync(embed: embed).ConfigureAwait(false);
+                return;
+            }
+            else
+            {
+                try
+                {
+                    //first we must create a private channel
+                    Guid guid = Guid.NewGuid();
+                    var newChannel = await ctx.Guild.CreateChannelAsync(guid.ToString(),
+                        ChannelType.Text, ctx.Guild.GetChannel(privateChannelGroup));
+                    //Then give the user access to the channel
+                    await newChannel.AddOverwriteAsync(ctx.Member, Permissions.AccessChannels);
+                    await QueueDialogue(ctx, newChannel, false);
+                    if (!timedOut)
+                    {
+                        var dodoMsg = await newChannel.SendMessageAsync(embed: sessionEmbed).ConfigureAwait(false);
+
+                        CreateQueueEmbed(turnipPrice, ctx, newChannel, attachment, maxGroupSize, dodoCode, message, isDaisy);
+                    }
+                    else
+                    {
+                        var message = await newChannel.SendMessageAsync("Your queue creation timed out. React with :thumbsup: to restart or :thumbsdown: to end." +
+                            " This message will time out in 4 minutes and end automatically if not.").ConfigureAwait(false);
+                        DiscordEmoji thumbsup = DiscordEmoji.FromName(ctx.Client, ":thumbsup:");
+                        DiscordEmoji thumbsDown = DiscordEmoji.FromName(ctx.Client, ":thumbsdown:");
+                        await message.CreateReactionAsync(thumbsup);
+                        await message.CreateReactionAsync(thumbsDown);
+                        var interactivity = ctx.Client.GetInteractivity();
+                        var result = await interactivity.WaitForReactionAsync(react => (react.Emoji == thumbsup ||
+                        react.Emoji == thumbsDown) && react.User == ctx.User, TimeSpan.FromMinutes(4)).ConfigureAwait(false);
+
+                        if (result.TimedOut || result.Result.Emoji == thumbsDown)
+                        {
+                            //close channel
+                            await newChannel.DeleteAsync();
+                        }
+                        else
+                        {
+                            await QueueDialogue(ctx, newChannel, true);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.Out.WriteLine(ex.Message);
+                    Console.Out.WriteLine(ex.StackTrace);
+                }
+            }
+        }
+
+        private async Task QueueDialogue(CommandContext ctx, DiscordChannel newChannel, bool secondTime)
+        {
+            bool ready = false;
+            var interactivity = ctx.Client.GetInteractivity();
+            DiscordEmoji yes = DiscordEmoji.FromName(ctx.Client, ":white_check_mark:");
+            DiscordEmoji no = DiscordEmoji.FromName(ctx.Client, ":x:");
+            // nooks :70xTimmy:
+            // Daisy :70zdaisymae:
+            DiscordEmoji daisy = DiscordEmoji.FromName(ctx.Client, ":70zdaisymae:");
+            DiscordEmoji nooks = DiscordEmoji.FromName(ctx.Client, ":70xTimmy:");
+            while (!ready)
+            {
+                var daisyNooksMessage = await newChannel.SendMessageAsync($"React {daisy} for daisy session or {nooks} for turnip session").ConfigureAwait(false);
+                await daisyNooksMessage.CreateReactionAsync(daisy).ConfigureAwait(false);
+                await daisyNooksMessage.CreateReactionAsync(nooks).ConfigureAwait(false);
+
+                var daisyOrNooks = await interactivity.WaitForReactionAsync(react => (react.Emoji == daisy ||
+                react.Emoji == nooks) && react.User == ctx.User, TimeSpan.FromMinutes(5)).ConfigureAwait(false);
+                if (daisyOrNooks.TimedOut)
+                {
+                    await newChannel.SendMessageAsync("Queue creation has timed out.").ConfigureAwait(false);
+                    timedOut = true;
+                    if (secondTime)
+                    {
+                        await newChannel.DeleteAsync();
+                    }
+                    break;
+                }
+                isDaisy = daisyOrNooks.Result.Emoji == daisy;
+
+                bool responseCorrect = true;
+                await newChannel.SendMessageAsync("Enter your Dodo Code").ConfigureAwait(false);
+
+                var msg = await interactivity.WaitForMessageAsync(x => x.Channel == newChannel && x.Author == ctx.Member, TimeSpan.FromMinutes(5)).ConfigureAwait(false);
+
+                if (msg.TimedOut)
+                {
+                    await newChannel.SendMessageAsync("Queue creation has timed out.").ConfigureAwait(false);
+                    timedOut = true;
+                    if (secondTime)
+                    {
+                        await newChannel.DeleteAsync();
+                    }
+                    break;
+                }
+
+                dodoCode = msg.Result.Content;
+                if (msg.Result.Content.ToLower() == "cancel")
+                {
+                    await newChannel.DeleteAsync();
+                    return;
+                }
+                if (dodoCode.Length != 5)
+                {
+                    await newChannel.SendMessageAsync("This is not a valid dodo code").ConfigureAwait(false);
+                    responseCorrect = false;
+                }
+
+                await newChannel.SendMessageAsync("Enter your price").ConfigureAwait(false);
+
+                msg = await interactivity.WaitForMessageAsync(x => x.Channel == newChannel && x.Author == ctx.Member, TimeSpan.FromMinutes(5)).ConfigureAwait(false);
+
+                if (msg.TimedOut)
+                {
+                    await newChannel.SendMessageAsync("Queue creation has timed out.").ConfigureAwait(false);
+                    timedOut = true;
+                    if (secondTime)
+                    {
+                        await newChannel.DeleteAsync();
+                    }
+                    break;
+                }
+
+                turnipPrice = msg.Result.Content;
+
+                if (msg.Result.Content.ToLower() == "cancel")
+                {
+                    await newChannel.DeleteAsync();
+                    return;
+                }
+                if (!int.TryParse(turnipPrice, out int price))
+                {
+                    await newChannel.SendMessageAsync("This is not a valid price").ConfigureAwait(false);
+                    responseCorrect = false;
+                }
+
+                await newChannel.SendMessageAsync("Enter session message for your guests").ConfigureAwait(false);
+
+                msg = await interactivity.WaitForMessageAsync(x => x.Channel == newChannel && x.Author == ctx.Member, TimeSpan.FromMinutes(5)).ConfigureAwait(false);
+
+                if (msg.TimedOut)
+                {
+                    await newChannel.SendMessageAsync("Queue creation has timed out.").ConfigureAwait(false);
+                    timedOut = true;
+                    if (secondTime)
+                    {
+                        await newChannel.DeleteAsync();
+                    }
+                    break;
+                }
+
+                if (msg.Result.Content.ToLower() == "cancel")
+                {
+                    await newChannel.DeleteAsync();
+                    return;
+                }
+                else
+                {
+                    message = string.IsNullOrEmpty(msg.Result.Content) ? "Host has not set a queue message" : msg.Result.Content;
+                }
+
+                await newChannel.SendMessageAsync("Enter how many people you want per group (max of 7)").ConfigureAwait(false);
+
+                msg = await interactivity.WaitForMessageAsync(x => x.Channel == newChannel && x.Author == ctx.Member, TimeSpan.FromMinutes(5)).ConfigureAwait(false);
+
+                maxGroupSize = msg.Result.Content;
+
+                if (msg.TimedOut)
+                {
+                    await newChannel.SendMessageAsync("Queue creation has timed out.").ConfigureAwait(false);
+                    timedOut = true;
+                    if (secondTime)
+                    {
+                        await newChannel.DeleteAsync();
+                    }
+                    break;
+                }
+
+                if (msg.Result.Content.ToLower() == "cancel")
+                {
+                    await newChannel.DeleteAsync();
+                    return;
+                }
+                if (!int.TryParse(maxGroupSize, out int groupSize) || groupSize > 7 || groupSize < 1)
+                {
+                    await newChannel.SendMessageAsync("This is not a valid group size").ConfigureAwait(false);
+                    responseCorrect = false;
+                }
+
+                await newChannel.SendMessageAsync("Please send a photo of your price").ConfigureAwait(false);
+
+                var attachmentMsg = await interactivity.WaitForMessageAsync(x => x.Channel == newChannel && x.Author == ctx.Member && x.Attachments.Count > 0, TimeSpan.FromMinutes(5)).ConfigureAwait(false);
+
+                if (attachmentMsg.TimedOut)
+                {
+                    await newChannel.SendMessageAsync("Queue creation has timed out.").ConfigureAwait(false);
+                    timedOut = true;
+                    if (secondTime)
+                    {
+                        await newChannel.DeleteAsync();
+                    }
+                    break;
+                }
+
+                attachment = attachmentMsg.Result.Attachments[0].Url;
+
+                var embed = new DiscordEmbedBuilder
+                {
+                    Title = "Turnip Session",
+                    Thumbnail = new DiscordEmbedBuilder.EmbedThumbnail
+                    {
+                        Url = attachment
+                    }
+                };
+
+                StringBuilder sb = new StringBuilder();
+                sb.AppendLine($"Dodo Code: {dodoCode}");
+                if (isDaisy)
+                {
+                    sb.AppendLine($"Daisy Price: {turnipPrice}");
+                }
+                else
+                {
+                    sb.AppendLine($"Turnip Price: {turnipPrice}");
+                }
+                sb.AppendLine($"Session Message: {message}");
+                sb.AppendLine($"Group Size: {maxGroupSize}");
+                sb.AppendLine($"If this information is correct press the :white_check_mark: otherwise press :x: to start again.");
+
+
+                embed.Description = sb.ToString();
+                if (responseCorrect)
+                {
+                    var sentMessage = await newChannel.SendMessageAsync(embed: embed).ConfigureAwait(false);
+
+                    await sentMessage.CreateReactionAsync(yes).ConfigureAwait(false);
+                    await sentMessage.CreateReactionAsync(no).ConfigureAwait(false);
+
+                    var response = await interactivity.WaitForReactionAsync(xe => xe.Emoji == yes || xe.Emoji == no,
+                        sentMessage, ctx.User, TimeSpan.FromMinutes(5)).ConfigureAwait(false);
+
+                    if (response.Result.Emoji == yes)
+                    {
+                        ready = true;
+                        timedOut = false;
+                    }
+                }
+                else
+                {
+                    await newChannel.SendMessageAsync("Parts of your response was incorrect please try again").ConfigureAwait(false);
+                }
+            }
+        }
+
+        private async void CreateQueueEmbed(string turnipPrice, CommandContext ctx, DiscordChannel channel, string attachment,
+        string maxSize, string dodoCode, string message, bool isDaisy)
+        {
+            string sessionCode = new AlphaNumericStringGenerator().GetRandomUppercaseAlphaNumericValue(5);
+            string embedTitle = isDaisy ? $"Daisy selling turnips for {turnipPrice}" : $"Nooks buying turnips for {turnipPrice}";
+            var queueEmbed = new DiscordEmbedBuilder
+            {
+                Title = embedTitle,
+                ImageUrl = attachment,
+                Description = $"To join type ```?join {sessionCode}```",
+                Footer = new DiscordEmbedBuilder.EmbedFooter
+                {
+                    Text = $"Hosted by {ctx.Member.DisplayName}"
+                }
+            };
+            ulong postChannelId = isDaisy ? daisyMaeChannel : turnipPostChannel;
+            var postChannel = ctx.Guild.GetChannel(postChannelId);
+            var queueMsg = await postChannel.SendMessageAsync(embed: queueEmbed).ConfigureAwait(false);
+
+            InsertQueueIntoDBAsync(ctx.User.Id, queueMsg.Id, channel.Id, int.Parse(maxSize), dodoCode, sessionCode, message, isDaisy);
+        }
+
         [Command("queuehelp")]
         [Aliases("qh")]
         [Description("Shows common queue commands")]
@@ -146,194 +518,6 @@ namespace ThePathBot.Commands.QueueCommands
                         await userDmChannel.SendMessageAsync($"Message from {queueOwner.DisplayName}: {message}").ConfigureAwait(false);
                     }
                     await ctx.Channel.SendMessageAsync($"Sent your message to the {discordIds.Count} members in your queue").ConfigureAwait(false);
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.Out.WriteLine(ex.Message);
-                Console.Out.WriteLine(ex.StackTrace);
-            }
-        }
-
-        [Command("create")]
-        [Description("Create queue")]
-        public async Task CreateQueue(CommandContext ctx)
-        {
-            try
-            {
-                if (ctx.Guild.Id == 694013861560320081)
-                {
-                    var embed = new DiscordEmbedBuilder
-                    {
-                        Title = "Wuh-oh!",
-                        Description = "Sorry... This command cannot be run in this server.",
-                        Color = DiscordColor.Blurple
-                    };
-                    await ctx.Channel.SendMessageAsync(embed: embed).ConfigureAwait(false);
-                    return;
-                }
-                //first we must create a private channel
-                Guid guid = Guid.NewGuid();
-                var newChannel = await ctx.Guild.CreateChannelAsync(guid.ToString(), ChannelType.Text, ctx.Guild.GetChannel(privateChannelGroup));
-                //Then give the user access to the channel
-                await newChannel.AddOverwriteAsync(ctx.Member, Permissions.AccessChannels);
-
-                // Now we can get some information
-                bool ready = false;
-                var interactivity = ctx.Client.GetInteractivity();
-                DiscordEmoji yes = DiscordEmoji.FromName(ctx.Client, ":white_check_mark:");
-                DiscordEmoji no = DiscordEmoji.FromName(ctx.Client, ":x:");
-                // nooks :70xTimmy:
-                // Daisy :70zdaisymae:
-                DiscordEmoji daisy = DiscordEmoji.FromName(ctx.Client, ":70zdaisymae:");
-                DiscordEmoji nooks = DiscordEmoji.FromName(ctx.Client, ":70xTimmy:");
-                string turnipPrice = "0";
-                string attachment = "";
-                string maxGroupSize = "0";
-                string dodoCode = "";
-                string message = "Welcome";
-                bool isDaisy = false;
-                while (!ready)
-                {
-                    var daisyNooksMessage = await newChannel.SendMessageAsync($"React {daisy} for daisy session or {nooks} for turnip session").ConfigureAwait(false);
-                    await daisyNooksMessage.CreateReactionAsync(daisy).ConfigureAwait(false);
-                    await daisyNooksMessage.CreateReactionAsync(nooks).ConfigureAwait(false);
-
-                    var daisyOrNooks = await interactivity.WaitForReactionAsync(react => (react.Emoji == daisy ||
-                    react.Emoji == nooks) && react.User == ctx.User, TimeSpan.FromMinutes(5)).ConfigureAwait(false);
-                    isDaisy = daisyOrNooks.Result.Emoji == daisy;
-
-                    bool responseCorrect = true;
-                    await newChannel.SendMessageAsync("Enter your Dodo Code").ConfigureAwait(false);
-
-                    var msg = await interactivity.WaitForMessageAsync(x => x.Channel == newChannel && x.Author == ctx.Member, TimeSpan.FromMinutes(5)).ConfigureAwait(false);
-
-                    dodoCode = msg.Result.Content;
-                    if (msg.Result.Content.ToLower() == "cancel")
-                    {
-                        await newChannel.DeleteAsync();
-                        return;
-                    }
-                    if (dodoCode.Length != 5)
-                    {
-                        await newChannel.SendMessageAsync("This is not a valid dodo code").ConfigureAwait(false);
-                        responseCorrect = false;
-                    }
-
-                    await newChannel.SendMessageAsync("Enter your price").ConfigureAwait(false);
-
-                    msg = await interactivity.WaitForMessageAsync(x => x.Channel == newChannel && x.Author == ctx.Member, TimeSpan.FromMinutes(5)).ConfigureAwait(false);
-
-                    turnipPrice = msg.Result.Content;
-
-                    if (msg.Result.Content.ToLower() == "cancel")
-                    {
-                        await newChannel.DeleteAsync();
-                        return;
-                    }
-                    if (!int.TryParse(turnipPrice, out int price))
-                    {
-                        await newChannel.SendMessageAsync("This is not a valid price").ConfigureAwait(false);
-                        responseCorrect = false;
-                    }
-
-                    await newChannel.SendMessageAsync("Enter session message for your guests").ConfigureAwait(false);
-
-                    msg = await interactivity.WaitForMessageAsync(x => x.Channel == newChannel && x.Author == ctx.Member, TimeSpan.FromMinutes(5)).ConfigureAwait(false);
-
-                    if (msg.Result.Content.ToLower() == "cancel")
-                    {
-                        await newChannel.DeleteAsync();
-                        return;
-                    }
-                    message = msg.Result.Content;
-
-                    await newChannel.SendMessageAsync("Enter how many people you want per group (max of 7)").ConfigureAwait(false);
-
-                    msg = await interactivity.WaitForMessageAsync(x => x.Channel == newChannel && x.Author == ctx.Member, TimeSpan.FromMinutes(5)).ConfigureAwait(false);
-
-                    maxGroupSize = msg.Result.Content;
-
-                    if (msg.Result.Content.ToLower() == "cancel")
-                    {
-                        await newChannel.DeleteAsync();
-                        return;
-                    }
-                    if (!int.TryParse(maxGroupSize, out int groupSize) || groupSize > 7 || groupSize < 1)
-                    {
-                        await newChannel.SendMessageAsync("This is not a valid group size").ConfigureAwait(false);
-                        responseCorrect = false;
-                    }
-
-                    await newChannel.SendMessageAsync("Please send a photo of your price").ConfigureAwait(false);
-
-                    var attachmentMsg = await interactivity.WaitForMessageAsync(x => x.Channel == newChannel && x.Author == ctx.Member && x.Attachments.Count > 0, TimeSpan.FromMinutes(5)).ConfigureAwait(false);
-
-                    attachment = attachmentMsg.Result.Attachments[0].Url;
-
-                    var embed = new DiscordEmbedBuilder
-                    {
-                        Title = "Turnip Session",
-                        Thumbnail = new DiscordEmbedBuilder.EmbedThumbnail
-                        {
-                            Url = attachment
-                        }
-                    };
-
-                    StringBuilder sb = new StringBuilder();
-                    sb.AppendLine($"Dodo Code: {dodoCode}");
-                    if (isDaisy)
-                    {
-                        sb.AppendLine($"Daisy Price: {turnipPrice}");
-                    }
-                    else
-                    {
-                        sb.AppendLine($"Turnip Price: {turnipPrice}");
-                    }
-                    sb.AppendLine($"Session Message: {message}");
-                    sb.AppendLine($"Group Size: {maxGroupSize}");
-                    sb.AppendLine($"If this information is correct press the :white_check_mark: otherwise press :x: to start again.");
-
-
-                    embed.Description = sb.ToString();
-                    if (responseCorrect)
-                    {
-                        var sentMessage = await newChannel.SendMessageAsync(embed: embed).ConfigureAwait(false);
-
-                        await sentMessage.CreateReactionAsync(yes).ConfigureAwait(false);
-                        await sentMessage.CreateReactionAsync(no).ConfigureAwait(false);
-
-                        var response = await interactivity.WaitForReactionAsync(xe => xe.Emoji == yes || xe.Emoji == no,
-                            sentMessage, ctx.User, TimeSpan.FromMinutes(5)).ConfigureAwait(false);
-
-                        if (response.Result.Emoji == yes)
-                        {
-                            ready = true;
-                        }
-                    }
-                    else
-                    {
-                        await newChannel.SendMessageAsync("Parts of your response was incorrect please try again").ConfigureAwait(false);
-                    }
-                }
-                var dodoMsg = await newChannel.SendMessageAsync(embed: sessionEmbed).ConfigureAwait(false);
-
-                CreateQueueEmbed(turnipPrice, ctx, newChannel, attachment, maxGroupSize, dodoCode, message, isDaisy, dodoMsg);
-                int.TryParse(turnipPrice, out int tprice);
-                if (ctx.Guild.Id == 744699540212416592 && tprice >= 500)
-                {
-                    DiscordRole turnipRole; //753724832423870577
-                    turnipRole = ctx.Guild.GetRole(753724832423870577);
-                    var turnipChannel = ctx.Guild.GetChannel(turnipPostChannel);
-                    var turnipRoleEmbed = new DiscordEmbedBuilder
-                    {
-                        Title = $"High turnip price at nooks",
-                        Description = $"{turnipRole.Mention} {ctx.User.Mention} is hosting a high price of" +
-                        $" {turnipPrice}. See {Formatter.Mention(turnipChannel)} for information on how to join.",
-                        Color = DiscordColor.Aquamarine
-                    };
-                    var loungeChannel = ctx.Guild.GetChannel(744731248416784545);
-                    await loungeChannel.SendMessageAsync($"{turnipRole.Mention}", embed: turnipRoleEmbed).ConfigureAwait(false);
                 }
             }
             catch (Exception ex)
@@ -520,10 +704,10 @@ namespace ThePathBot.Commands.QueueCommands
                     return;
                 }
                 AddMemberToQueue(ctx.Member.Id, queueChannelId, code);
-                var joinMessage = await ctx.Channel.SendMessageAsync(
-                    $"{ctx.Member.Mention} You have successfully joined the queue and will be DM'd when " +
-                    "it's your turn.").ConfigureAwait(false);
-                StartTimer(ctx.Client, ctx.Guild.Id, ctx.Channel.Id, joinMessage.Id);
+
+                await ctx.Member.SendMessageAsync("You have successfully joined the queue and will be DM'd when it's your turn. " +
+                    $"To Check your place in the queue you can run {Formatter.InlineCode("?place " + code)} in #path-bot-commands");
+
                 var pChannel = ctx.Guild.GetChannel(queueChannelId);
                 await pChannel.SendMessageAsync($"{ctx.Member.DisplayName} has joined your queue").ConfigureAwait(false);
             }
@@ -971,8 +1155,8 @@ namespace ThePathBot.Commands.QueueCommands
                 };
                 await message.DeleteAsync();
                 MakeQueueActive(ctx.Channel.Id);
-                await ctx.Guild.GetChannel(channelToSearch).SendMessageAsync(embed: newEmbed).ConfigureAwait(false); // var newMsg = 
-                //UpdateMessageID(ctx.Channel.Id, newMsg.Id);
+                var newMsg = await ctx.Guild.GetChannel(channelToSearch).SendMessageAsync(embed: newEmbed).ConfigureAwait(false); // var newMsg = 
+                UpdateMessageID(ctx.Channel.Id, newMsg.Id);
                 await ctx.Channel.SendMessageAsync("Queue has been resumed").ConfigureAwait(false); 
             }
             catch (Exception ex)
@@ -1470,7 +1654,7 @@ namespace ThePathBot.Commands.QueueCommands
                 {
                     string query = "UPDATE pathQueues SET queueMessageID = ?msgId WHERE privateChannelID = ?channelId";
                     MySqlCommand command = new MySqlCommand(query, connection);
-                    command.Parameters.Add("?mgsId", MySqlDbType.VarChar, 40).Value = MessageID;
+                    command.Parameters.Add("?msgId", MySqlDbType.VarChar, 40).Value = MessageID;
                     command.Parameters.Add("?channelId", MySqlDbType.VarChar, 40).Value = privateChannelID;
                     connection.Open();
                     command.ExecuteNonQuery();
