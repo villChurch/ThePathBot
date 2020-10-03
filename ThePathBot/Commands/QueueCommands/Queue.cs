@@ -71,6 +71,7 @@ namespace ThePathBot.Commands.QueueCommands
         }
 
         [Command("place")]
+        [Aliases("check")]
         [Description("Check your place in a queue")]
         public async Task CheckPlaceInQueue(CommandContext ctx, [Description("code of queue")] string queueCode)
         {
@@ -100,11 +101,12 @@ namespace ThePathBot.Commands.QueueCommands
                 else
                 {
                     //02/10/2020 12:36:54
-                    DateTime time = DateTime.Parse(timeJoined + "Z");
+                    Console.Out.WriteLine($"time joined ===============> {timeJoined}");
+                    DateTime time = DateTime.Parse(timeJoined);
                     int numberInfront = 0;
                     using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
                     {
-                        string query = "Select * from pathQueuers Where queueChannelID = ?channelId AND TimeJoined >= ?timeJoined " +
+                        string query = "Select * from pathQueuers Where queueChannelID = ?channelId AND TimeJoined <= ?timeJoined " +
                             "and visited = 0 and DiscordID <> ?discordId AND onIsland = 0";
                         var command = new MySqlCommand(query, connection);
                         command.Parameters.Add("?channelId", MySqlDbType.VarChar, 40).Value = channelId;
@@ -131,7 +133,7 @@ namespace ThePathBot.Commands.QueueCommands
                         int yourQueue = ((numberInfront - 1) / groupSize) + 1;
                         string queue = yourQueue == 1 ? "queue" : "queues";
                         await ctx.Channel.SendMessageAsync(
-                            $"There are currently {yourQueue} {queue} ahead of you and the queue size is {groupSize} at a time").ConfigureAwait(false);
+                            $"There is currently {yourQueue} {queue} ahead of you and the queue size is {groupSize} at a time").ConfigureAwait(false);
                     }
                 }
             }
@@ -704,7 +706,7 @@ namespace ThePathBot.Commands.QueueCommands
                 AddMemberToQueue(ctx.Member.Id, queueChannelId, code);
 
                 await ctx.Member.SendMessageAsync("You have successfully joined the queue and will be DM'd when it's your turn. " +
-                    $"To Check your place in the queue you can run {Formatter.InlineCode("checkqueue" + code)} in #path-bot-commands");
+                    $"To Check your place in the queue you can run {Formatter.InlineCode("?place " + code)} in #path-bot-commands");
 
                 var pChannel = ctx.Guild.GetChannel(queueChannelId);
                 await pChannel.SendMessageAsync($"{ctx.Member.DisplayName} has joined your queue").ConfigureAwait(false);

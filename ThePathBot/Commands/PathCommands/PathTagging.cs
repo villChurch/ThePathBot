@@ -2,6 +2,7 @@
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
+using DSharpPlus;
 using DSharpPlus.CommandsNext;
 using DSharpPlus.CommandsNext.Attributes;
 using DSharpPlus.Entities;
@@ -17,14 +18,52 @@ namespace ThePathBot.Commands.PathCommands
         private readonly DBConnectionUtils dBConnectionUtils = new DBConnectionUtils();
 
         [Command("addtag")]
-        [Description("Add a tag for a path")]
-        public async Task addTag(CommandContext ctx, params string[] tagContent)
+        [Description("Starts a dialogue to add a tag")]
+        public async Task addTag(CommandContext ctx)
         {
             try
             {
-                string pathLink = tagContent[0];
-                tagContent[0] = "";
-                string tag = String.Join(" ", tagContent);
+                var interactivity = ctx.Client.GetInteractivity();
+                await ctx.Channel.SendMessageAsync("Enter the name for this tag").ConfigureAwait(false);
+                var response = await interactivity.WaitForMessageAsync(x => x.Author == ctx.User && x.Channel == ctx.Channel && !string.IsNullOrEmpty(x.Content))
+                    .ConfigureAwait(false);
+
+                if (response.TimedOut)
+                {
+                    await ctx.Channel.SendMessageAsync("Tag Creation has timed out").ConfigureAwait(false);
+                    return;
+                }
+                string tag = response.Result.Content;
+
+                await ctx.Channel.SendMessageAsync("Enter the content for this tag").ConfigureAwait(false);
+                var contentResponse = await interactivity.WaitForMessageAsync(x => x.Author == ctx.User && x.Channel == ctx.Channel)
+                    .ConfigureAwait(false);
+
+                if (contentResponse.TimedOut)
+                {
+                    await ctx.Channel.SendMessageAsync("Tag Creation has timed out").ConfigureAwait(false);
+                    return;
+                }
+                string pathLink = "";
+                if (string.IsNullOrEmpty(contentResponse.Result.Content) && contentResponse.Result.Attachments.Count > 0)
+                {
+                    pathLink = contentResponse.Result.Attachments[0].Url;
+                }
+                else if (string.IsNullOrEmpty(contentResponse.Result.Content))
+                {
+                    await ctx.Channel.SendMessageAsync("Cannot have an empty tag").ConfigureAwait(false);
+                    return;
+                }
+                else if (contentResponse.Result.Attachments.Count > 0)
+                {
+                    pathLink = contentResponse.Result.Content;
+                    pathLink += $" {contentResponse.Result.Attachments[0].Url}";
+                }
+                else
+                {
+                    pathLink = contentResponse.Result.Content;
+                }
+                //string tag = String.Join(" ", tagContent);
 
                 using (MySqlConnection connection = new MySqlConnection(dBConnectionUtils.ReturnPopulatedConnectionStringAsync()))
                 {
@@ -35,7 +74,7 @@ namespace ThePathBot.Commands.PathCommands
                     connection.Open();
                     command.ExecuteNonQuery();
                 }
-                await ctx.Channel.SendMessageAsync("Added tag <" + pathLink + "> to the list of tagged paths")
+                await ctx.Channel.SendMessageAsync("Added tag <" + tag + "> to the list of tagged paths")
                     .ConfigureAwait(false);
             }
             catch (Exception ex)
