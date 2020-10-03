@@ -192,6 +192,7 @@
     <Compile Include="Models\GithubIssue.cs" />
     <Compile Include="Models\GithubIssueResponse.cs" />
     <Compile Include="Commands\SupportCommands\CodeShare.cs" />
+    <Compile Include="Commands\Admin\CreateEmbed.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
