@@ -17,12 +17,12 @@ namespace ThePathBot.Commands.SupportCommands
             var embed = new DiscordEmbedBuilder
             {
                 Title = $"Code Sharing",
-                Description = $"{starFrag} Have a dream address you want to share? Want to share your friend code or Nook Exchange wishlist? " +
-                "Fill out the following Google Form to share this info with fellow server members: https://forms.gle/jVihwvjYmrGsRXT8A" +
-                $"Use the following link to view other's codes: https://docs.google.com/spreadsheets/d/1bqmcEvqzvV2UlaYDcwexexfwGQ9VSx2HVDMUng6bgsg/edit?usp=sharing {starFrag}",
                 Color = DiscordColor.Aquamarine
             };
-
+            embed.AddField("Add your information", $"{starFrag} Have a dream address you want to share? Want to share your friend code or Nook Exchange wishlist? " +
+                $"Fill out the following Google Form to share this info with fellow server members: https://forms.gle/jVihwvjYmrGsRXT8A {starFrag}", false);
+            embed.AddField("View others information", $"{starFrag} Use the following link to view other's codes: " +
+                $"https://docs.google.com/spreadsheets/d/1bqmcEvqzvV2UlaYDcwexexfwGQ9VSx2HVDMUng6bgsg/edit?usp=sharing {starFrag}", false);
             await ctx.Channel.SendMessageAsync(embed: embed).ConfigureAwait(false);
         }
     }

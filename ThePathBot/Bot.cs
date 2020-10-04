@@ -257,11 +257,11 @@ namespace ThePathBot
             return Task.CompletedTask;
         }
 
-        private async Task Client_GuildAvailable(GuildCreateEventArgs e)
+        private Task Client_GuildAvailable(GuildCreateEventArgs e)
         {
             e.Client.Logger.Log(LogLevel.Information, $"The Path - Guild available: {e.Guild.Name}");
-            await UpdatePresenceAsync(e, e.Guild.MemberCount);
-            //return Task.CompletedTask;
+            //await UpdatePresenceAsync(e, e.Guild.MemberCount);
+            return Task.CompletedTask;
         }
 
         private Task Client_ClientError(ClientErrorEventArgs e)
@@ -281,8 +281,28 @@ namespace ThePathBot
 
         private async Task Commands_CommandErrored(CommandErrorEventArgs e)
         {
-            e.Context.Client.Logger.Log(LogLevel.Error, $"The Path - {e.Context.User.Username} tried executing '{e.Command?.QualifiedName ?? "<unknown command>"}' but it errored: {e.Exception.GetType()}: {e.Exception.Message ?? "<no message>"}");
+            if (!(e.Exception is ChecksFailedException))
+            {
+                e.Context.Client.Logger.Log(LogLevel.Error, $"The Path - {e.Context.User.Username} tried executing '{e.Command?.QualifiedName ?? "<unknown command>"}' but it errored: {e.Exception.GetType()}: {e.Exception.Message ?? "<no message>"}");
 
+                DiscordGuild errorGuild = await e.Context.Client.GetGuildAsync(761698823726039120);
+                DiscordChannel errorChannel = errorGuild.GetChannel(761937809786404884);
+
+                var embed = new DiscordEmbedBuilder
+                {
+                    Title = $"{e.Exception.GetBaseException().GetType()} has occured",
+                    Color = DiscordColor.Red,
+                    Footer = new DiscordEmbedBuilder.EmbedFooter
+                    {
+                        Text = $"Caused by {e.Context.Member.DisplayName} at {e.Context.Message.CreationTimestamp}"
+                    }
+                };
+
+                embed.AddField("Message", e.Exception.Message, false);
+                embed.AddField("Stacktrace", e.Exception.StackTrace, false);
+
+                await errorChannel.SendMessageAsync(embed: embed).ConfigureAwait(false);
+            }
             //if (e.Exception is ChecksFailedException ex)
             //{
             //    var emoji = DiscordEmoji.FromName(e.Context.Client, ":no_entry:");

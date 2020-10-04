@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: localhost
--- Generation Time: Sep 06, 2020 at 09:02 PM
+-- Generation Time: Oct 04, 2020 at 11:41 AM
 -- Server version: 8.0.17
 -- PHP Version: 7.2.11
 
@@ -21,6 +21,18 @@ SET time_zone = "+00:00";
 -- Database: `thePAth`
 --
 
+DELIMITER $$
+--
+-- Procedures
+--
+CREATE DEFINER=`root`@`localhost` PROCEDURE `RemovePath` (IN `DiscordID` VARCHAR(40), IN `pathName` VARCHAR(255))  NO SQL
+DELETE FROM pathLinks WHERE pathLinks.DiscordID = DiscordID AND pathLinks.pathname = pathName$$
+
+CREATE DEFINER=`root`@`localhost` PROCEDURE `RemoveTag` (IN `tagName` VARCHAR(2550))  NO SQL
+DELETE FROM pathTags WHERE pathTags.tagName = tagName$$
+
+DELIMITER ;
+
 -- --------------------------------------------------------
 
 --
@@ -30,6 +42,20 @@ SET time_zone = "+00:00";
 CREATE TABLE `configuration` (
   `item` varchar(255) NOT NULL,
   `value` varchar(255) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `createdEmbeds`
+--
+
+CREATE TABLE `createdEmbeds` (
+  `id` int(11) NOT NULL,
+  `DiscordChannel` varchar(40) NOT NULL,
+  `DiscordID` varchar(40) NOT NULL,
+  `MessageID` varchar(40) NOT NULL,
+  `CreationTime` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- --------------------------------------------------------
@@ -68,7 +94,35 @@ CREATE TABLE `fridgeBoardConfig` (
   `fridgeBoardChannelID` varchar(40) NOT NULL,
   `UpdatedByID` varchar(40) NOT NULL,
   `trophiesNeeded` int(11) NOT NULL DEFAULT '5',
-  `roleIdToGive` varchar(40) DEFAULT NULL
+  `roleIdToGive` varchar(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT '0'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `giveawayConfig`
+--
+
+CREATE TABLE `giveawayConfig` (
+  `id` int(11) NOT NULL,
+  `GuildID` varchar(40) NOT NULL,
+  `ChannelID` varchar(40) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `giveaways`
+--
+
+CREATE TABLE `giveaways` (
+  `id` int(11) NOT NULL,
+  `GuildID` varchar(40) NOT NULL,
+  `HostID` varchar(40) NOT NULL,
+  `MessageID` varchar(40) NOT NULL,
+  `EndTime` datetime NOT NULL,
+  `Winners` int(11) NOT NULL DEFAULT '1',
+  `Completed` tinyint(1) DEFAULT '0'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- --------------------------------------------------------
@@ -105,6 +159,22 @@ CREATE TABLE `pathQueueBans` (
   `id` int(11) NOT NULL,
   `DiscordID` varchar(40) NOT NULL,
   `queueChannelID` varchar(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `pathQueueMessage`
+--
+
+CREATE TABLE `pathQueueMessage` (
+  `privateChannelID` varchar(40) NOT NULL,
+  `embedMessageID` varchar(40) NOT NULL,
+  `dodoCode` varchar(5) NOT NULL,
+  `daisy` tinyint(1) NOT NULL,
+  `turnipPrice` varchar(4) NOT NULL,
+  `message` varchar(2555) NOT NULL,
+  `maxGroupSize` varchar(2) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- --------------------------------------------------------
@@ -208,6 +278,12 @@ ALTER TABLE `configuration`
   ADD UNIQUE KEY `item` (`item`);
 
 --
+-- Indexes for table `createdEmbeds`
+--
+ALTER TABLE `createdEmbeds`
+  ADD PRIMARY KEY (`id`);
+
+--
 -- Indexes for table `creatorCodes`
 --
 ALTER TABLE `creatorCodes`
@@ -224,6 +300,18 @@ ALTER TABLE `fridgeBoard`
 --
 ALTER TABLE `fridgeBoardConfig`
   ADD PRIMARY KEY (`GuildID`);
+
+--
+-- Indexes for table `giveawayConfig`
+--
+ALTER TABLE `giveawayConfig`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `giveaways`
+--
+ALTER TABLE `giveaways`
+  ADD PRIMARY KEY (`id`);
 
 --
 -- Indexes for table `pathLinks`
@@ -282,9 +370,27 @@ ALTER TABLE `ticketSystem`
 --
 
 --
+-- AUTO_INCREMENT for table `createdEmbeds`
+--
+ALTER TABLE `createdEmbeds`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT for table `fridgeBoard`
 --
 ALTER TABLE `fridgeBoard`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `giveawayConfig`
+--
+ALTER TABLE `giveawayConfig`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `giveaways`
+--
+ALTER TABLE `giveaways`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --

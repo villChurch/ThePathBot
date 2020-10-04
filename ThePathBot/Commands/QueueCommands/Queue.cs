@@ -110,7 +110,7 @@ namespace ThePathBot.Commands.QueueCommands
                             "and visited = 0 and DiscordID <> ?discordId AND onIsland = 0";
                         var command = new MySqlCommand(query, connection);
                         command.Parameters.Add("?channelId", MySqlDbType.VarChar, 40).Value = channelId;
-                        command.Parameters.Add("?timeJoined", MySqlDbType.VarChar).Value = time.ToString("yyyy-MM-dd hh:mm:ss");
+                        command.Parameters.Add("?timeJoined", MySqlDbType.VarChar).Value = time.ToString("yyyy-MM-dd HH:mm:ss");
                         command.Parameters.Add("?discordId", MySqlDbType.VarChar, 40).Value = ctx.Member.Id;
                         connection.Open();
                         var reader = command.ExecuteReader();
@@ -429,6 +429,23 @@ namespace ThePathBot.Commands.QueueCommands
             ulong postChannelId = isDaisy ? daisyMaeChannel : turnipPostChannel;
             var postChannel = ctx.Guild.GetChannel(postChannelId);
             var queueMsg = await postChannel.SendMessageAsync(embed: queueEmbed).ConfigureAwait(false);
+
+            int.TryParse(turnipPrice, out int tprice);
+            if (ctx.Guild.Id == 744699540212416592 && tprice >= 500)
+            {
+                DiscordRole turnipRole; //753724832423870577
+                turnipRole = ctx.Guild.GetRole(753724832423870577);
+                var turnipChannel = ctx.Guild.GetChannel(turnipPostChannel);
+                var turnipRoleEmbed = new DiscordEmbedBuilder
+                {
+                    Title = $"High turnip price at nooks",
+                    Description = $"{turnipRole.Mention} {ctx.User.Mention} is hosting a high price of" +
+                    $" {turnipPrice}. See {Formatter.Mention(turnipChannel)} for information on how to join.",
+                    Color = DiscordColor.Aquamarine
+                };
+                var loungeChannel = ctx.Guild.GetChannel(744731248416784545);
+                await loungeChannel.SendMessageAsync($"{turnipRole.Mention}", embed: turnipRoleEmbed).ConfigureAwait(false);
+            }
 
             InsertQueueIntoDBAsync(ctx.User.Id, queueMsg.Id, channel.Id, int.Parse(maxSize), dodoCode, sessionCode, message, isDaisy);
         }
