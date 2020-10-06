@@ -14,7 +14,7 @@ namespace ThePathBot.Commands.ACNHCommands
     public class Villager : BaseCommandModule
     {
         [Command("villager")]
-        [Cooldown(1, 60, CooldownBucketType.Channel)]
+        [Cooldown(5, 60, CooldownBucketType.User)]
         public async Task getVillager(CommandContext ctx, params string[] villagerInput)
         {
             //if (ctx.Guild.Id == 694013861560320081)
@@ -75,7 +75,7 @@ namespace ThePathBot.Commands.ACNHCommands
 
         [Command("personality")]
         [Description("Gets a list of villagers with that personaltiy")]
-        [Cooldown(1, 60, CooldownBucketType.Channel)]
+        [Cooldown(5, 60, CooldownBucketType.User)]
         public async Task Personality(CommandContext ctx, [RemainingText, Description("personality to search for")] string personality)
         {
             try
